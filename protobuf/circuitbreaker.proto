@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+option go_package = "/protobuf";
+
+package protobuf;
+
+import "google/protobuf/empty.proto";
+
+message RequestInput {
+    string method = 1;
+    string url = 2;
+    map<string, string> header = 3;
+    bytes body = 4;
+    map<string, string> initial_header = 5;
+}
+
+message GetInput {
+    string url = 1;
+    map<string, string> header = 2;
+    map<string, string> initial_header = 3;
+}
+
+message PostInput {
+    string url = 1;
+    map<string, string> header = 2;
+    bytes body = 3;
+    map<string, string> initial_header = 4;
+}
+
+message PutInput {
+    string url = 1;
+    map<string, string> header = 2;
+    bytes body = 3;
+    map<string, string> initial_header = 4;
+}
+
+message DeleteInput {
+    string url = 1;
+    map<string, string> header = 2;
+    map<string, string> initial_header = 3;
+}
+
+message Response {
+    string status = 1;
+    int32 status_code = 2;
+    string proto = 3;
+    int32 proto_major = 4;
+    int32 proto_minor = 5;
+    map<string, string> header = 6;
+    bytes body = 7;
+    int64 content_length = 8;
+}
+
+service CircuitBreaker {
+    rpc Request(RequestInput) returns (Response) {}
+    rpc Get(GetInput) returns (Response) {}
+    rpc Post(PostInput) returns (Response) {}
+    rpc Put(PutInput) returns (Response) {}
+    rpc Delete(DeleteInput) returns (Response) {}
+}
