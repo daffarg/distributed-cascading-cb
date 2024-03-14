@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CircuitBreakerClient interface {
-	Request(ctx context.Context, in *RequestInput, opts ...grpc.CallOption) (*Response, error)
+	GeneralRequest(ctx context.Context, in *GeneralRequestInput, opts ...grpc.CallOption) (*Response, error)
 	Get(ctx context.Context, in *GetInput, opts ...grpc.CallOption) (*Response, error)
 	Post(ctx context.Context, in *PostInput, opts ...grpc.CallOption) (*Response, error)
 	Put(ctx context.Context, in *PutInput, opts ...grpc.CallOption) (*Response, error)
@@ -37,9 +37,9 @@ func NewCircuitBreakerClient(cc grpc.ClientConnInterface) CircuitBreakerClient {
 	return &circuitBreakerClient{cc}
 }
 
-func (c *circuitBreakerClient) Request(ctx context.Context, in *RequestInput, opts ...grpc.CallOption) (*Response, error) {
+func (c *circuitBreakerClient) GeneralRequest(ctx context.Context, in *GeneralRequestInput, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
-	err := c.cc.Invoke(ctx, "/protobuf.CircuitBreaker/Request", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/protobuf.CircuitBreaker/GeneralRequest", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (c *circuitBreakerClient) Delete(ctx context.Context, in *DeleteInput, opts
 // All implementations must embed UnimplementedCircuitBreakerServer
 // for forward compatibility
 type CircuitBreakerServer interface {
-	Request(context.Context, *RequestInput) (*Response, error)
+	GeneralRequest(context.Context, *GeneralRequestInput) (*Response, error)
 	Get(context.Context, *GetInput) (*Response, error)
 	Post(context.Context, *PostInput) (*Response, error)
 	Put(context.Context, *PutInput) (*Response, error)
@@ -98,8 +98,8 @@ type CircuitBreakerServer interface {
 type UnimplementedCircuitBreakerServer struct {
 }
 
-func (UnimplementedCircuitBreakerServer) Request(context.Context, *RequestInput) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Request not implemented")
+func (UnimplementedCircuitBreakerServer) GeneralRequest(context.Context, *GeneralRequestInput) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GeneralRequest not implemented")
 }
 func (UnimplementedCircuitBreakerServer) Get(context.Context, *GetInput) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
@@ -126,20 +126,20 @@ func RegisterCircuitBreakerServer(s grpc.ServiceRegistrar, srv CircuitBreakerSer
 	s.RegisterService(&CircuitBreaker_ServiceDesc, srv)
 }
 
-func _CircuitBreaker_Request_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestInput)
+func _CircuitBreaker_GeneralRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GeneralRequestInput)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CircuitBreakerServer).Request(ctx, in)
+		return srv.(CircuitBreakerServer).GeneralRequest(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protobuf.CircuitBreaker/Request",
+		FullMethod: "/protobuf.CircuitBreaker/GeneralRequest",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CircuitBreakerServer).Request(ctx, req.(*RequestInput))
+		return srv.(CircuitBreakerServer).GeneralRequest(ctx, req.(*GeneralRequestInput))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -224,8 +224,8 @@ var CircuitBreaker_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*CircuitBreakerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Request",
-			Handler:    _CircuitBreaker_Request_Handler,
+			MethodName: "GeneralRequest",
+			Handler:    _CircuitBreaker_GeneralRequest_Handler,
 		},
 		{
 			MethodName: "Get",

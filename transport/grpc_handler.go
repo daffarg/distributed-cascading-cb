@@ -1,15 +1,25 @@
 package transport
 
 import (
+	"github.com/daffarg/distributed-cascading-cb/endpoint"
 	"github.com/daffarg/distributed-cascading-cb/protobuf"
-	"github.com/go-kit/kit/endpoint"
+	"github.com/go-kit/kit/transport/grpc"
 )
 
 type handler struct {
-	request endpoint.Endpoint
-	get     endpoint.Endpoint
-	post    endpoint.Endpoint
-	put     endpoint.Endpoint
-	delete  endpoint.Endpoint
+	generalRequest grpc.Handler
 	protobuf.UnimplementedCircuitBreakerServer
+}
+
+func NewCircuitBreakerServer(ep endpoint.CircuitBreakerEndpoint) protobuf.CircuitBreakerServer {
+	opts := []grpc.ServerOption{}
+
+	return &handler{
+		generalRequest: grpc.NewServer(
+			ep.GeneralRequestEp,
+			decodeGeneralRequestReq,
+			encodeResponse,
+			opts...,
+		),
+	}
 }
