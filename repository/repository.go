@@ -11,5 +11,6 @@ type Repository interface {
 	SetWithExp(ctx context.Context, key, value string, exp time.Duration) error
 	AddMembersIntoSet(ctx context.Context, key string, members ...string) error
 	IsMemberOfSet(ctx context.Context, key, value string) (bool, error)
+	IsMembersOfSet(ctx context.Context, key string, value ...string) ([]bool, error)
 	GetMemberOfSet(ctx context.Context, key string) ([]string, error)
 }

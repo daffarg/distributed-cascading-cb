@@ -60,6 +60,15 @@ func (k *kvRocks) IsMemberOfSet(ctx context.Context, key, value string) (bool, e
 	return isMember, err
 }
 
+func (k *kvRocks) IsMembersOfSet(ctx context.Context, key string, value ...string) ([]bool, error) {
+	isMembers, err := k.client.SMIsMember(ctx, key, value).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	return isMembers, nil
+}
+
 func (k *kvRocks) GetMemberOfSet(ctx context.Context, key string) ([]string, error) {
 	members, err := k.client.SMembers(ctx, key).Result()
 	if err != nil {
