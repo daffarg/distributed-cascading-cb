@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ func (k *kafkaBroker) Publish(ctx context.Context, topic string, message interfa
 
 func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (string, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
+		GroupID:     os.Getenv("CB_CONSUMER_GROUP"),
 		Brokers:     []string{k.addr},
 		Topic:       topic,
 		StartOffset: kafka.LastOffset,
@@ -50,6 +52,7 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (string, erro
 
 func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler func(ctx context.Context, key, value string, exp time.Duration) error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
+		GroupID:     os.Getenv("CB_CONSUMER_GROUP"),
 		Brokers:     []string{k.addr},
 		Topic:       topic,
 		StartOffset: kafka.LastOffset,

@@ -2,6 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net"
+	"os"
+	"time"
+
 	"github.com/daffarg/distributed-cascading-cb/endpoint"
 	"github.com/daffarg/distributed-cascading-cb/protobuf"
 	"github.com/daffarg/distributed-cascading-cb/repository/kvrocks"
@@ -14,18 +19,17 @@ import (
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"io"
-	"net"
-	"os"
-	"time"
 )
 
 func init() {
 	godotenv.Load()
 }
 
+var (
+	writer io.Writer
+)
+
 func main() {
-	var writer io.Writer
 	writer = os.Stdout
 
 	var log logkit.Logger
@@ -34,6 +38,12 @@ func main() {
 		log = logkit.With(log, util.LogTimestamp, logkit.TimestampFormat(time.Now, time.RFC3339), util.LogPath, logkit.DefaultCaller)
 	}
 	defer level.Info(log).Log(util.LogMessage, "service stopped")
+
+	cbConsumerGroup := os.Getenv("CB_CONSUMER_GROUP")
+	if cbConsumerGroup == "" {
+		level.Error(log).Log(util.LogError, "please set CB_CONSUMER_GROUP in env variable")
+		os.Exit(1)
+	}
 
 	circuitBreakerSvc := service.NewCircuitBreakerService(log, validator.New(), kvrocks.NewKVRocksRepository(
 		util.GetEnv("KVROCKS_HOST", "127.0.0.1"),
@@ -60,8 +70,6 @@ func main() {
 	address := fmt.Sprintf("%s:%s", util.GetEnv("SERVICE_IP", "127.0.0.1"), util.GetEnv("SERVICE_PORT", "8080"))
 
 	grpcServer := grpc.NewServer()
-	protobuf.RegisterCircuitBreakerServer(grpcServer, circuitBreakerServer)
-	reflection.Register(grpcServer)
 
 	lis, errListen := net.Listen("tcp", address)
 	if errListen != nil {
@@ -71,8 +79,11 @@ func main() {
 		return
 	}
 
+	protobuf.RegisterCircuitBreakerServer(grpcServer, circuitBreakerServer)
+	reflection.Register(grpcServer)
+
 	// Serve gRPC Server
-	level.Info(log).Log(util.LogMessage, fmt.Sprintf("Serving gRPC on https://%s", address))
+	level.Info(log).Log(util.LogMessage, fmt.Sprintf("Serving gRPC on %s", address))
 	level.Error(log).Log(
 		util.LogError,
 		grpcServer.Serve(lis),
