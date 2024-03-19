@@ -52,7 +52,7 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 	endpointStatusKey := util.FormEndpointStatusKey(circuitBreakerName)
 
 	// check if we're already subscribing to the endpoint topics
-	isMembers, err := s.repository.IsMembersOfSet(ctx, util.RequiredEndpointsKey, endpointStatusKey, circuitBreakerName)
+	isMember, err := s.repository.IsMemberOfSet(ctx, util.RequiredEndpointsKey, endpointStatusKey)
 	if err != nil {
 		level.Error(s.log).Log(
 			util.LogMessage, "failed to check if the endpoints has already subscribing to the topic",
@@ -61,26 +61,19 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 		)
 	}
 
-	endpointMap := map[string]bool{
-		endpointStatusKey:  isMembers[0],
-		circuitBreakerName: isMembers[1],
-	}
+	if !isMember {
+		go s.broker.SubscribeAsync(context.WithoutCancel(ctx), endpointStatusKey, s.repository.SetWithExp)
 
-	for ep := range endpointMap {
-		if !endpointMap[ep] {
-			go s.broker.SubscribeAsync(context.WithoutCancel(ctx), ep, s.repository.SetWithExp)
-
-			go func() {
-				err = s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), util.RequiredEndpointsKey, ep)
-				if err != nil {
-					level.Error(s.log).Log(
-						util.LogMessage, "failed to add the endpoint into set",
-						util.LogError, err,
-						util.LogRequest, req,
-					)
-				}
-			}()
-		}
+		go func() {
+			err = s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), util.RequiredEndpointsKey, endpointStatusKey)
+			if err != nil {
+				level.Error(s.log).Log(
+					util.LogMessage, "failed to add the endpoint into set",
+					util.LogError, err,
+					util.LogRequest, req,
+				)
+			}
+		}()
 	}
 
 	_, err = s.repository.Get(ctx, endpointStatusKey)
