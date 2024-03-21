@@ -22,11 +22,12 @@ type service struct {
 	breakers   map[string]*circuitbreaker.CircuitBreaker
 }
 
-func NewCircuitBreakerService(log log.Logger, validator *validator.Validate, repository repository.Repository) CircuitBreakerService {
+func NewCircuitBreakerService(log log.Logger, validator *validator.Validate, repository repository.Repository, broker broker.MessageBroker) CircuitBreakerService {
 	return &service{
 		log:        log,
 		validator:  validator,
 		repository: repository,
+		broker:     broker,
 		breakers:   make(map[string]*circuitbreaker.CircuitBreaker),
 	}
 }

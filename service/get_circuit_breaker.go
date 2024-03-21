@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/daffarg/distributed-cascading-cb/circuitbreaker"
@@ -29,10 +30,22 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 
 			if to == circuitbreaker.StateOpen {
 				go func() {
-					err := s.broker.Publish(context.Background(), name, to.String())
+					timeout := time.Duration(util.GetIntEnv("CB_TIMEOUT", 60)) * time.Second
+
+					err := s.broker.Publish(context.Background(), name, fmt.Sprintf("%s:%d", to.String(), timeout))
 					if err != nil {
 						level.Error(s.log).Log(
 							util.LogMessage, "failed to publish circuit breaker status",
+							util.LogError, err,
+							util.LogCircuitBreakerEndpoint, name,
+							util.LogCircuitBreakerNewStatus, to.String(),
+						)
+					}
+
+					err = s.repository.SetWithExp(context.Background(), util.FormEndpointStatusKey(name), to.String(), timeout)
+					if err != nil {
+						level.Error(s.log).Log(
+							util.LogMessage, "failed to set circuit breaker status to db",
 							util.LogError, err,
 							util.LogCircuitBreakerEndpoint, name,
 							util.LogCircuitBreakerNewStatus, to.String(),

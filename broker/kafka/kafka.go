@@ -19,8 +19,11 @@ type kafkaBroker struct {
 	addr string
 }
 
-func NewKafkaBroker(addr string) broker.MessageBroker {
-	return &kafkaBroker{addr: addr}
+func NewKafkaBroker(log log.Logger, addr string) broker.MessageBroker {
+	return &kafkaBroker{
+		log:  log,
+		addr: addr,
+	}
 }
 
 func (k *kafkaBroker) Publish(ctx context.Context, topic string, message interface{}) error {
@@ -29,8 +32,18 @@ func (k *kafkaBroker) Publish(ctx context.Context, topic string, message interfa
 		Topic: topic,
 	}
 
+	var messageBytes []byte
+	switch msg := message.(type) {
+	case string:
+		messageBytes = []byte(msg)
+	case []byte:
+		messageBytes = msg
+	default:
+		return util.ErrUnsupportedMessageType
+	}
+
 	return writer.WriteMessages(ctx, kafka.Message{
-		Value: message.([]byte),
+		Value: messageBytes,
 	})
 }
 
@@ -60,7 +73,7 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 
 	go func() {
 		for {
-			msg, err := reader.ReadMessage(ctx)
+			msg, err := reader.FetchMessage(ctx)
 			if err != nil {
 				level.Error(k.log).Log(
 					util.LogMessage, "failed to read circuit breaker status from message broker",
@@ -69,14 +82,35 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 				)
 			}
 
+			if string(msg.Value) == "" {
+				err := reader.CommitMessages(ctx, msg)
+				if err != nil {
+					level.Error(k.log).Log(
+						util.LogMessage, "failed to commit message",
+						util.LogError, err,
+						util.LogTopic, topic,
+					)
+				}
+				continue
+			}
+
 			messages := strings.Split(string(msg.Value), ":")
 
 			cbStatus := messages[0]
+
 			timeout, _ := strconv.ParseInt(messages[1], 10, 64)
 			err = handler(ctx, topic, cbStatus, time.Duration(timeout)*time.Second)
 			if err != nil {
 				level.Error(k.log).Log(
 					util.LogMessage, "failed to store circuit breaker status into db",
+					util.LogError, err,
+					util.LogTopic, topic,
+				)
+			}
+			err = reader.CommitMessages(ctx, msg)
+			if err != nil {
+				level.Error(k.log).Log(
+					util.LogMessage, "failed to commit message",
 					util.LogError, err,
 					util.LogTopic, topic,
 				)

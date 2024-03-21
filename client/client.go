@@ -18,6 +18,7 @@ func NewCircuitBreakerClient(conn *grpc.ClientConn) *CircuitBreakerClient {
 }
 
 func (c *CircuitBreakerClient) GeneralRequest(ctx context.Context, req *protobuf.GeneralRequestInput) (*protobuf.Response, error) {
+
 	res, err := c.client.GeneralRequest(ctx, req)
 	if err != nil {
 		return &protobuf.Response{}, err

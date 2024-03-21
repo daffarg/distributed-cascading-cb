@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/daffarg/distributed-cascading-cb/broker/kafka"
 	"github.com/daffarg/distributed-cascading-cb/endpoint"
 	"github.com/daffarg/distributed-cascading-cb/protobuf"
 	"github.com/daffarg/distributed-cascading-cb/repository/kvrocks"
@@ -50,7 +51,12 @@ func main() {
 		util.GetEnv("KVROCKS_PORT", "6666"),
 		util.GetEnv("KVROCKS_PASSWORD", ""),
 		util.GetIntEnv("KVROCKS_DB", 0),
-	))
+	),
+		kafka.NewKafkaBroker(
+			log,
+			util.GetEnv("KAFKA_ADDRESS", "127.0.0.1:9092"),
+		),
+	)
 
 	var sysLog logkit.Logger
 	{
@@ -67,7 +73,7 @@ func main() {
 	}
 
 	circuitBreakerServer := transport.NewCircuitBreakerServer(circuitBreakerEndpoint)
-	address := fmt.Sprintf("%s:%s", util.GetEnv("SERVICE_IP", "127.0.0.1"), util.GetEnv("SERVICE_PORT", "8080"))
+	address := fmt.Sprintf("%s:%s", util.GetEnv("SERVICE_IP", "127.0.0.1"), util.GetEnv("SERVICE_PORT", "5320"))
 
 	grpcServer := grpc.NewServer()
 
