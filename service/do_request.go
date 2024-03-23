@@ -12,9 +12,6 @@ func (s *service) doRequest(method, url string, body []byte, header map[string]s
 	client := &http.Client{}
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
 	if err != nil {
-		level.Error(s.log).Log(
-			util.LogError, err,
-		)
 		return nil, err
 	}
 
@@ -24,9 +21,6 @@ func (s *service) doRequest(method, url string, body []byte, header map[string]s
 
 	res, err := client.Do(req)
 	if err != nil {
-		level.Error(s.log).Log(
-			util.LogError, err,
-		)
 		return nil, err
 	}
 	return res, nil

@@ -94,6 +94,11 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 			if errors.Is(err, circuitbreaker.ErrOpenState) {
 				return Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 			}
+			level.Error(s.log).Log(
+				util.LogMessage, "failed to execute the request",
+				util.LogError, err,
+				util.LogRequest, req,
+			)
 			return Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
 		}
 		defer httpResponse.(*http.Response).Body.Close()
