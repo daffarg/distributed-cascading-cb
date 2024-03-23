@@ -31,7 +31,14 @@ var (
 )
 
 func main() {
-	writer = os.Stdout
+	logfile, err := os.OpenFile("logs/app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		fmt.Printf("error opening log file: %v", err)
+		os.Exit(1)
+	}
+	defer logfile.Close()
+
+	writer = logfile
 
 	var log logkit.Logger
 	{
