@@ -3,9 +3,6 @@ package service
 import (
 	"bytes"
 	"net/http"
-
-	"github.com/daffarg/distributed-cascading-cb/util"
-	"github.com/go-kit/log/level"
 )
 
 func (s *service) doRequest(method, url string, body []byte, header map[string]string) (*http.Response, error) {
