@@ -22,6 +22,4 @@ COPY --from=builder /app/circuit-breaker .
 
 EXPOSE 5320
 
-RUN mkdir -p /logs
-
 CMD ["./circuit-breaker"]

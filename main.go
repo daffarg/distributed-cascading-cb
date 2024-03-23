@@ -31,6 +31,12 @@ var (
 )
 
 func main() {
+	err := os.MkdirAll("logs", 0755)
+	if err != nil {
+		fmt.Println("Failed to create log directory:", err)
+		os.Exit(1)
+	}
+
 	logfile, err := os.OpenFile("logs/app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		fmt.Printf("error opening log file: %v", err)
