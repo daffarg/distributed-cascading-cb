@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/daffarg/distributed-cascading-cb/circuitbreaker"
 	"github.com/daffarg/distributed-cascading-cb/util"
@@ -96,7 +97,12 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 		}()
 	}
 
+	startTime := time.Now()
 	_, err = s.repository.Get(ctx, endpointStatusKey)
+	endTime := time.Now()
+	duration := endTime.Sub(startTime)
+
+	level.Info(s.log).Log("get cb status duration", duration)
 	if err != nil {
 		if !errors.Is(err, util.ErrKeyNotFound) {
 			level.Error(s.log).Log(
