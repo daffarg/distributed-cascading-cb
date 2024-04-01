@@ -51,14 +51,34 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 
 	endpointStatusKey := util.FormEndpointStatusKey(circuitBreakerName)
 
+	go func() {
+		if req.RequiringEndpoint != "" && req.RequiringMethod != "" {
+			requiringEndpointsKey := util.FormRequiringEndpointsKey(circuitBreakerName)
+
+			requiringEndpointName := util.FormEndpointName(req.RequiringEndpoint, req.RequiringMethod)
+			err := s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), requiringEndpointsKey, requiringEndpointName)
+			if err != nil {
+				level.Error(s.log).Log(
+					util.LogMessage, "failed to add requiring endpoint into set",
+					util.LogError, err,
+					util.LogRequest, req,
+				)
+			}
+		}
+	}()
+
+	isMember := false
 	// check if we're already subscribing to the endpoint topics
-	isMember, err := s.repository.IsMemberOfSet(ctx, util.RequiredEndpointsKey, circuitBreakerName)
-	if err != nil {
-		level.Error(s.log).Log(
-			util.LogMessage, "failed to check if the endpoints has already subscribing to the topic",
-			util.LogError, err,
-			util.LogRequest, req,
-		)
+	_, ok := s.isRequiringEndpointAdded[circuitBreakerName]
+	if !ok {
+		isMember, err = s.repository.IsMemberOfSet(ctx, util.RequiredEndpointsKey, circuitBreakerName)
+		if err != nil {
+			level.Error(s.log).Log(
+				util.LogMessage, "failed to check if the endpoints has already subscribing to the topic",
+				util.LogError, err,
+				util.LogRequest, req,
+			)
+		}
 	}
 
 	if !isMember {
@@ -114,22 +134,6 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 
 		return response, nil
 	}
-
-	go func() {
-		if req.RequiringEndpoint != "" && req.RequiringMethod != "" {
-			requiringEndpointsKey := util.FormRequiringEndpointsKey(circuitBreakerName)
-
-			requiringEndpointName := util.FormEndpointName(req.RequiringEndpoint, req.RequiringMethod)
-			err := s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), requiringEndpointsKey, requiringEndpointName)
-			if err != nil {
-				level.Error(s.log).Log(
-					util.LogMessage, "failed to add requiring endpoint into set",
-					util.LogError, err,
-					util.LogRequest, req,
-				)
-			}
-		}
-	}()
 
 	// cb is open
 	return Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
