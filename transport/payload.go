@@ -10,7 +10,7 @@ import (
 func decodeGeneralRequestReq(_ context.Context, r interface{}) (interface{}, error) {
 	pbReq := r.(*protobuf.GeneralRequestInput)
 
-	return service.GeneralRequestReq{
+	return &service.GeneralRequestReq{
 		Method:            pbReq.Method,
 		URL:               pbReq.Url,
 		Header:            pbReq.Header,
@@ -21,7 +21,7 @@ func decodeGeneralRequestReq(_ context.Context, r interface{}) (interface{}, err
 }
 
 func encodeResponse(_ context.Context, r interface{}) (interface{}, error) {
-	res := r.(service.Response)
+	res := r.(*service.Response)
 
 	return &protobuf.Response{
 		Status:        res.Status,

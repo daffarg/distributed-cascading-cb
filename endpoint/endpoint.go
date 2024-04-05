@@ -23,9 +23,18 @@ func NewCircuitBreakerEndpoint(svc service.CircuitBreakerService, log log.Logger
 	}, nil
 }
 
+func (c *CircuitBreakerEndpoint) GeneralRequest(ctx context.Context, req *service.GeneralRequestReq) (*service.Response, error) {
+	resp, err := c.GeneralRequestEp(ctx, req)
+	if err != nil {
+		return &service.Response{}, err
+	}
+
+	return resp.(*service.Response), nil
+}
+
 func makeGeneralRequestEndpoint(svc service.CircuitBreakerService) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		req := request.(service.GeneralRequestReq)
+		req := request.(*service.GeneralRequestReq)
 		return svc.GeneralRequest(ctx, req)
 	}
 }

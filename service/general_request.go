@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/daffarg/distributed-cascading-cb/circuitbreaker"
 	"github.com/daffarg/distributed-cascading-cb/util"
@@ -23,14 +22,14 @@ type GeneralRequestReq struct {
 	RequiringMethod   string            `json:"requiring_method"`
 }
 
-func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Response, error) {
+func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*Response, error) {
 	if err := s.validator.Struct(req); err != nil {
 		level.Error(s.log).Log(
 			util.LogMessage, "failed precondition on request",
 			util.LogError, err,
 			util.LogRequest, req,
 		)
-		return Response{}, status.Error(codes.FailedPrecondition, err.Error())
+		return &Response{}, status.Error(codes.FailedPrecondition, err.Error())
 	}
 
 	parsedUrl, err := util.GetGeneralURLFormat(req.URL)
@@ -40,7 +39,7 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 			util.LogError, err,
 			util.LogRequest, req,
 		)
-		return Response{}, status.Error(codes.Internal, util.ErrFailedParsingURL.Error())
+		return &Response{}, status.Error(codes.Internal, util.ErrFailedParsingURL.Error())
 	}
 
 	req.URL = strings.ToLower(req.URL)
@@ -52,12 +51,20 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 
 	endpointStatusKey := util.FormEndpointStatusKey(circuitBreakerName)
 
-	go func() {
+	go func() { // add the endpoint itself
 		if req.RequiringEndpoint != "" && req.RequiringMethod != "" {
 			requiringEndpointsKey := util.FormRequiringEndpointsKey(circuitBreakerName)
+			parsedUrl, err := util.GetGeneralURLFormat(req.RequiringEndpoint)
+			if err != nil {
+				level.Error(s.log).Log(
+					util.LogMessage, "failed parsing requested url",
+					util.LogError, err,
+					util.LogRequest, req,
+				)
+			}
 
-			requiringEndpointName := util.FormEndpointName(req.RequiringEndpoint, req.RequiringMethod)
-			err := s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), requiringEndpointsKey, requiringEndpointName)
+			requiringEndpointName := util.FormEndpointName(parsedUrl, req.RequiringMethod)
+			isNewValue, err := s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), requiringEndpointsKey, requiringEndpointName)
 			if err != nil {
 				level.Error(s.log).Log(
 					util.LogMessage, "failed to add requiring endpoint into set",
@@ -65,44 +72,31 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 					util.LogRequest, req,
 				)
 			}
+
+			if isNewValue == 1 {
+				go s.broker.SubscribeAsync(context.WithoutCancel(ctx), requiringEndpointName, s.repository.SetWithExp)
+			}
 		}
 	}()
 
-	isMember := false
-	// check if we're already subscribing to the endpoint topics
-	_, ok := s.isRequiringEndpointAdded[circuitBreakerName]
-	if !ok {
-		isMember, err = s.repository.IsMemberOfSet(ctx, util.RequiredEndpointsKey, circuitBreakerName)
+	go func() {
+		requiringEndpointsKey := util.FormRequiringEndpointsKey(circuitBreakerName)
+
+		isNewValue, err := s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), requiringEndpointsKey, circuitBreakerName)
 		if err != nil {
 			level.Error(s.log).Log(
-				util.LogMessage, "failed to check if the endpoints has already subscribing to the topic",
+				util.LogMessage, "failed to add requiring endpoint into set",
 				util.LogError, err,
 				util.LogRequest, req,
 			)
 		}
-	}
 
-	if !isMember {
-		go s.broker.SubscribeAsync(context.WithoutCancel(ctx), endpointStatusKey, s.repository.SetWithExp)
+		if isNewValue == 1 {
+			go s.broker.SubscribeAsync(context.WithoutCancel(ctx), circuitBreakerName, s.repository.SetWithExp)
+		}
+	}()
 
-		go func() {
-			err = s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), util.RequiredEndpointsKey, circuitBreakerName)
-			if err != nil {
-				level.Error(s.log).Log(
-					util.LogMessage, "failed to add the endpoint into set",
-					util.LogError, err,
-					util.LogRequest, req,
-				)
-			}
-		}()
-	}
-
-	startTime := time.Now()
 	_, err = s.repository.Get(ctx, endpointStatusKey)
-	endTime := time.Now()
-	duration := endTime.Sub(startTime)
-
-	level.Info(s.log).Log("get cb status duration", duration)
 	if err != nil {
 		if !errors.Is(err, util.ErrKeyNotFound) {
 			level.Error(s.log).Log(
@@ -118,14 +112,14 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 		})
 		if err != nil {
 			if errors.Is(err, circuitbreaker.ErrOpenState) {
-				return Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
+				return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 			}
 			level.Error(s.log).Log(
 				util.LogMessage, "failed to execute the request",
 				util.LogError, err,
 				util.LogRequest, req,
 			)
-			return Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
+			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
 		}
 		defer httpResponse.(*http.Response).Body.Close()
 
@@ -138,9 +132,9 @@ func (s *service) GeneralRequest(ctx context.Context, req GeneralRequestReq) (Re
 			)
 		}
 
-		return response, nil
+		return &response, nil
 	}
 
 	// cb is open
-	return Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
+	return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 }

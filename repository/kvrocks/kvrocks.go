@@ -47,8 +47,8 @@ func (k *kvRocks) Get(ctx context.Context, key string) (string, error) {
 	return value, err
 }
 
-func (k *kvRocks) AddMembersIntoSet(ctx context.Context, key string, members ...string) error {
-	return k.client.SAdd(ctx, key, members).Err()
+func (k *kvRocks) AddMembersIntoSet(ctx context.Context, key string, members ...string) (int64, error) {
+	return k.client.SAdd(ctx, key, members).Result()
 }
 
 func (k *kvRocks) IsMemberOfSet(ctx context.Context, key, value string) (bool, error) {
