@@ -16,7 +16,7 @@ func NewGRPCClient(conn *grpc.ClientConn) service.CircuitBreakerService {
 	{
 		generalRequestEndpoint = grpctransport.NewClient(
 			conn,
-			"pb.CircuitBreaker",
+			"protobuf.CircuitBreaker",
 			"GeneralRequest",
 			encodeGeneralRequestReq,
 			decodeResponse,
