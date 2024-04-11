@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"time"
 
 	"github.com/daffarg/distributed-cascading-cb/repository"
@@ -15,16 +16,24 @@ type kvRocks struct {
 	client *redis.Client // using redis as client for Apache KVRocks
 }
 
-func NewKVRocksRepository(host, port, password string, db int) repository.Repository {
+func NewKVRocksRepository(host, port, password string, db int) (repository.Repository, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%s", host, port),
 		Password: password,
 		DB:       db,
 	})
 
+	if err := redisotel.InstrumentTracing(client); err != nil {
+		return nil, err
+	}
+
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		return nil, err
+	}
+
 	return &kvRocks{
 		client: client,
-	}
+	}, nil
 }
 
 func (k *kvRocks) Set(ctx context.Context, key, value string) error {

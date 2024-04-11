@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"github.com/daffarg/distributed-cascading-cb/tracer"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"time"
 
@@ -18,6 +23,7 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -59,23 +65,64 @@ func main() {
 		os.Exit(1)
 	}
 
-	circuitBreakerSvc := service.NewCircuitBreakerService(log, validator.New(), kvrocks.NewKVRocksRepository(
-		util.GetEnv("KVROCKS_HOST", "127.0.0.1"),
-		util.GetEnv("KVROCKS_PORT", "6666"),
-		util.GetEnv("KVROCKS_PASSWORD", ""),
-		util.GetIntEnv("KVROCKS_DB", 0),
-	),
-		kafka.NewKafkaBroker(
-			log,
-			util.GetEnv("KAFKA_ADDRESS", "127.0.0.1:9092"),
-		),
-	)
-
 	var sysLog logkit.Logger
 	{
 		sysLog = logkit.NewJSONLogger(writer)
 		sysLog = logkit.With(sysLog, util.LogTimestamp, logkit.TimestampFormat(time.Now, time.RFC3339), util.LogPath, logkit.Caller(4))
 	}
+
+	tracingProvider, err := tracer.NewTracerProvider(
+		context.Background(), os.Getenv("CB_CONSUMER_GROUP"), util.GetEnv("TRACING_BACKEND_URL", "localhost:4317"),
+	)
+	if err != nil {
+		level.Error(log).Log(
+			util.LogError, err,
+		)
+		return
+	}
+
+	stopTracingProvider, err := tracingProvider.RegisterAsGlobal()
+	if err != nil {
+		level.Error(log).Log(
+			util.LogError, err,
+		)
+		return
+	}
+	defer func() {
+		if err = stopTracingProvider(context.TODO()); err != nil {
+			level.Error(log).Log(
+				util.LogError, err,
+			)
+			return
+		}
+	}()
+
+	otelTracer := otel.Tracer(util.GetEnv("SERVICE_NAME", "CB SERVICE"))
+
+	kvRocks, err := kvrocks.NewKVRocksRepository(
+		util.GetEnv("KVROCKS_HOST", "127.0.0.1"),
+		util.GetEnv("KVROCKS_PORT", "6666"),
+		util.GetEnv("KVROCKS_PASSWORD", ""),
+		util.GetIntEnv("KVROCKS_DB", 0),
+	)
+	if err != nil {
+		level.Error(log).Log(
+			util.LogError, err,
+		)
+		return
+	}
+
+	circuitBreakerSvc := service.NewCircuitBreakerService(log, validator.New(), kvRocks,
+		kafka.NewKafkaBroker(
+			log,
+			util.GetEnv("KAFKA_ADDRESS", "127.0.0.1:9092"),
+		),
+		&http.Client{
+			Timeout:   10 * time.Second,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+		},
+		otelTracer,
+	)
 
 	circuitBreakerEndpoint, err := endpoint.NewCircuitBreakerEndpoint(circuitBreakerSvc, sysLog)
 	if err != nil {
@@ -88,7 +135,9 @@ func main() {
 	circuitBreakerServer := transport.NewCircuitBreakerServer(circuitBreakerEndpoint)
 	address := fmt.Sprintf("%s:%s", util.GetEnv("SERVICE_IP", "127.0.0.1"), util.GetEnv("SERVICE_PORT", "5320"))
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
 
 	lis, errListen := net.Listen("tcp", address)
 	if errListen != nil {

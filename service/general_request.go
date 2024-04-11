@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"net/http"
 	"strings"
 
 	"github.com/daffarg/distributed-cascading-cb/circuitbreaker"
@@ -54,7 +53,7 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 	go func() { // add the endpoint itself
 		if req.RequiringEndpoint != "" && req.RequiringMethod != "" {
 			requiringEndpointsKey := util.FormRequiringEndpointsKey(circuitBreakerName)
-			parsedUrl, err := util.GetGeneralURLFormat(req.RequiringEndpoint)
+			parsedUrl, err = util.GetGeneralURLFormat(req.RequiringEndpoint)
 			if err != nil {
 				level.Error(s.log).Log(
 					util.LogMessage, "failed parsing requested url",
@@ -107,8 +106,8 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 		}
 
 		// do request if error when getting cb status or cb status is not open
-		httpResponse, err := s.getCircuitBreaker(circuitBreakerName).Execute(func() (interface{}, error) {
-			return s.doRequest(req.Method, req.URL, req.Body, req.Header)
+		response, err := s.getCircuitBreaker(circuitBreakerName).Execute(func() (interface{}, error) {
+			return s.doRequest(ctx, req.Method, req.URL, req.Body, req.Header)
 		})
 		if err != nil {
 			if errors.Is(err, circuitbreaker.ErrOpenState) {
@@ -121,18 +120,8 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 			)
 			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
 		}
-		defer httpResponse.(*http.Response).Body.Close()
 
-		response, err := s.convertToResponse(httpResponse.(*http.Response))
-		if err != nil {
-			level.Error(s.log).Log(
-				util.LogMessage, "failed to convert http response to service response",
-				util.LogError, err,
-				util.LogRequest, req,
-			)
-		}
-
-		return &response, nil
+		return response.(*Response), nil
 	}
 
 	// cb is open
