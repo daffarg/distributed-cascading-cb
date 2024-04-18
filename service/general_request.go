@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/btcsuite/btcd/btcutil/base58"
 	"strings"
 
 	"github.com/daffarg/distributed-cascading-cb/circuitbreaker"
@@ -73,7 +74,8 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 			}
 
 			if isNewValue == 1 {
-				go s.broker.SubscribeAsync(context.WithoutCancel(ctx), requiringEndpointName, s.repository.SetWithExp)
+				encodedTopic := base58.Encode([]byte(requiringEndpointName))
+				go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
 			}
 		}
 	}()
@@ -91,7 +93,8 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 		}
 
 		if isNewValue == 1 {
-			go s.broker.SubscribeAsync(context.WithoutCancel(ctx), circuitBreakerName, s.repository.SetWithExp)
+			encodedTopic := base58.Encode([]byte(circuitBreakerName))
+			go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
 		}
 	}()
 
