@@ -1,0 +1,5 @@
+alternativeEndpoints:
+    - endpoint: "localhost:8081/hello"
+      method: "GET"
+      alternativeEndpoint: "localhost:8082/hello"
+      alternativeMethod: "GET"

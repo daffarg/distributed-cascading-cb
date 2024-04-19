@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/btcsuite/btcd/btcutil/base58"
 	"strings"
 
 	"github.com/daffarg/distributed-cascading-cb/circuitbreaker"
@@ -48,55 +47,21 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 	req.RequiringMethod = strings.ToUpper(req.RequiringMethod)
 
 	circuitBreakerName := util.FormEndpointName(parsedUrl, req.Method)
-
 	endpointStatusKey := util.FormEndpointStatusKey(circuitBreakerName)
 
-	go func() { // add the endpoint itself
-		if req.RequiringEndpoint != "" && req.RequiringMethod != "" {
-			requiringEndpointsKey := util.FormRequiringEndpointsKey(circuitBreakerName)
-			parsedUrl, err = util.GetGeneralURLFormat(req.RequiringEndpoint)
-			if err != nil {
-				level.Error(s.log).Log(
-					util.LogMessage, "failed parsing requested url",
-					util.LogError, err,
-					util.LogRequest, req,
-				)
-			}
+	go s.handleRequiringEndpoint(ctx, &handleRequiringEndpointReq{
+		RequiringEndpoint:  req.RequiringEndpoint,
+		RequiringMethod:    req.RequiringMethod,
+		CircuitBreakerName: circuitBreakerName,
+	})
 
-			requiringEndpointName := util.FormEndpointName(parsedUrl, req.RequiringMethod)
-			isNewValue, err := s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), requiringEndpointsKey, requiringEndpointName)
-			if err != nil {
-				level.Error(s.log).Log(
-					util.LogMessage, "failed to add requiring endpoint into set",
-					util.LogError, err,
-					util.LogRequest, req,
-				)
-			}
+	go s.handleRequestedEndpoint(ctx, &handleRequestedEndpointReq{
+		RequestedEndpoint:  req.URL,
+		RequestedMethod:    req.Method,
+		CircuitBreakerName: circuitBreakerName,
+	})
 
-			if isNewValue == 1 {
-				encodedTopic := base58.Encode([]byte(requiringEndpointName))
-				go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
-			}
-		}
-	}()
-
-	go func() {
-		requiringEndpointsKey := util.FormRequiringEndpointsKey(circuitBreakerName)
-
-		isNewValue, err := s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), requiringEndpointsKey, circuitBreakerName)
-		if err != nil {
-			level.Error(s.log).Log(
-				util.LogMessage, "failed to add requiring endpoint into set",
-				util.LogError, err,
-				util.LogRequest, req,
-			)
-		}
-
-		if isNewValue == 1 {
-			encodedTopic := base58.Encode([]byte(circuitBreakerName))
-			go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
-		}
-	}()
+	altEndpoint, hasAltEp := s.config.AlternativeEndpoints[circuitBreakerName]
 
 	_, err = s.repository.Get(ctx, endpointStatusKey)
 	if err != nil {
@@ -114,19 +79,35 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 		})
 		if err != nil {
 			if errors.Is(err, circuitbreaker.ErrOpenState) {
-				return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
+				if hasAltEp {
+					res, err := s.executeAlternativeEndpoint(ctx, &executeAlternativeEndpointReq{
+						AlternativeEndpoint: altEndpoint,
+						Body:                req.Body,
+						Header:              req.Header,
+					})
+					if err != nil {
+						return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteAltEndpoint.Error())
+					}
+					return res, nil
+				}
 			}
-			level.Error(s.log).Log(
-				util.LogMessage, "failed to execute the request",
-				util.LogError, err,
-				util.LogRequest, req,
-			)
-			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
 		}
 
 		return response.(*Response), nil
 	}
 
 	// cb is open
+	if hasAltEp {
+		res, err := s.executeAlternativeEndpoint(ctx, &executeAlternativeEndpointReq{
+			AlternativeEndpoint: altEndpoint,
+			Body:                req.Body,
+			Header:              req.Header,
+		})
+		if err != nil {
+			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteAltEndpoint.Error())
+		}
+		return res, nil
+	}
+
 	return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 }

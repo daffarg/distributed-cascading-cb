@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/daffarg/distributed-cascading-cb/config"
 	"github.com/daffarg/distributed-cascading-cb/tracer"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/daffarg/distributed-cascading-cb/broker/kafka"
@@ -37,20 +39,26 @@ var (
 )
 
 func main() {
-	err := os.MkdirAll("logs", 0755)
-	if err != nil {
-		fmt.Println("Failed to create log directory:", err)
-		os.Exit(1)
-	}
+	logDir := os.Getenv("LOG_DIR")
 
-	logfile, err := os.OpenFile("logs/app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		fmt.Printf("error opening log file: %v", err)
-		os.Exit(1)
-	}
-	defer logfile.Close()
+	if logDir != "" {
+		err := os.MkdirAll(os.Getenv("LOG_DIR"), 0755)
+		if err != nil {
+			fmt.Println("Failed to create log directory:", err)
+			os.Exit(1)
+		}
 
-	writer = logfile
+		logfile, err := os.OpenFile(filepath.Join(logDir, util.GetEnv("LOG_FILE_NAME", "app.log")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			fmt.Printf("error opening log file: %v", err)
+			os.Exit(1)
+		}
+		defer logfile.Close()
+
+		writer = logfile
+	} else {
+		writer = os.Stdout
+	}
 
 	var log logkit.Logger
 	{
@@ -112,7 +120,19 @@ func main() {
 		return
 	}
 
-	circuitBreakerSvc := service.NewCircuitBreakerService(log, validator.New(), kvRocks,
+	cbConfig := config.NewConfig()
+	err = cbConfig.Read(util.GetEnv("CONFIG_PATH", "config.yaml"))
+	if err != nil {
+		level.Error(log).Log(
+			util.LogError, err,
+		)
+		return
+	}
+
+	circuitBreakerSvc := service.NewCircuitBreakerService(
+		log,
+		validator.New(),
+		kvRocks,
 		kafka.NewKafkaBroker(
 			log,
 			util.GetEnv("KAFKA_ADDRESS", "127.0.0.1:9092"),
@@ -122,6 +142,7 @@ func main() {
 			Transport: otelhttp.NewTransport(http.DefaultTransport),
 		},
 		otelTracer,
+		cbConfig,
 	)
 
 	circuitBreakerEndpoint, err := endpoint.NewCircuitBreakerEndpoint(circuitBreakerSvc, sysLog)

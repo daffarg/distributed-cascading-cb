@@ -19,7 +19,7 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 	st := circuitbreaker.Settings{
 		Name: name,
 		ReadyToTrip: func(counts circuitbreaker.Counts) bool {
-			return counts.ConsecutiveFailures > uint32(util.GetIntEnv("CB_MAX_CONSECUTIVE_FAILURES", 5))
+			return counts.ConsecutiveFailures >= uint32(util.GetIntEnv("CB_MAX_CONSECUTIVE_FAILURES", 5))
 		},
 		Timeout: timeout,
 		OnStateChange: func(name string, from circuitbreaker.State, to circuitbreaker.State) {

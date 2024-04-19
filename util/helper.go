@@ -43,10 +43,10 @@ func FormEndpointName(url, method string) string {
 	return fmt.Sprintf("%s:%s", method, url)
 }
 
-func FormEndpointStatusKey(circuitBreakerName string) string {
-	return fmt.Sprintf("status:%s", circuitBreakerName)
+func FormEndpointStatusKey(endpointName string) string {
+	return fmt.Sprintf("status:%s", endpointName)
 }
 
-func FormRequiringEndpointsKey(circuitBreakerName string) string {
-	return fmt.Sprintf("requirings:%s", circuitBreakerName)
+func FormRequiringEndpointsKey(endpointName string) string {
+	return fmt.Sprintf("requirings:%s", endpointName)
 }

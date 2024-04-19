@@ -11,6 +11,7 @@ const (
 	LogCircuitBreakerEndpoint  = "circuit_breaker_endpoint"
 	LogCircuitBreakerOldStatus = "circuit_breaker_old_status"
 	LogCircuitBreakerNewStatus = "circuit_breaker_new_status"
+	LogAlternativeEndpoint     = "alternative_endpoint"
 )
 
 const (
