@@ -25,7 +25,7 @@ func (s *service) executeAlternativeEndpoint(ctx context.Context, req *executeAl
 			)
 		}
 
-		res, err := s.doRequest(ctx, req.AlternativeEndpoint.Method, req.AlternativeEndpoint.Endpoint, req.Body, req.Header)
+		res, err := s.doRequest(ctx, req.AlternativeEndpoint.AlternativeMethod, req.AlternativeEndpoint.AlternativeEndpoint, req.Body, req.Header)
 		if err != nil {
 			level.Error(s.log).Log(
 				util.LogMessage, "failed to execute the request to the alternative endpoint",

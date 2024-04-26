@@ -56,6 +56,12 @@ message Response {
     int64 content_length = 8;
 }
 
+message Status {
+    string endpoint = 1;
+    string status = 2;
+    uint32 timeout = 3;
+}
+
 service CircuitBreaker {
     rpc GeneralRequest(GeneralRequestInput) returns (Response) {}
     rpc Get(GetInput) returns (Response) {}

@@ -129,14 +129,22 @@ func main() {
 		return
 	}
 
+	kafkaBroker, err := kafka.NewKafkaBroker(
+		log,
+		util.GetEnv("KAFKA_CONFIG_PATH", "client.properties"),
+	)
+	if err != nil {
+		level.Error(log).Log(
+			util.LogError, err,
+		)
+		return
+	}
+
 	circuitBreakerSvc := service.NewCircuitBreakerService(
 		log,
 		validator.New(),
 		kvRocks,
-		kafka.NewKafkaBroker(
-			log,
-			util.GetEnv("KAFKA_ADDRESS", "127.0.0.1:9092"),
-		),
+		kafkaBroker,
 		&http.Client{
 			Timeout:   10 * time.Second,
 			Transport: otelhttp.NewTransport(http.DefaultTransport),

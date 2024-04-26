@@ -91,6 +91,7 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 					return res, nil
 				}
 			}
+			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
 		}
 
 		return response.(*Response), nil
