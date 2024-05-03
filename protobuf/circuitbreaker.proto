@@ -6,7 +6,7 @@ package protobuf;
 
 import "google/protobuf/empty.proto";
 
-message GeneralRequestInput {
+message GeneralRequest {
     string method = 1;
     string url = 2;
     map<string, string> header = 3;
@@ -15,22 +15,14 @@ message GeneralRequestInput {
     string requiring_method = 6;
 }
 
-message GetInput {
+message GetRequest {
     string url = 1;
     map<string, string> header = 2;
     string requiring_endpoint = 5;
     string requiring_method = 6;
 }
 
-message PostInput {
-    string url = 1;
-    map<string, string> header = 2;
-    bytes body = 3;
-    string requiring_endpoint = 5;
-    string requiring_method = 6;
-}
-
-message PutInput {
+message PostRequest {
     string url = 1;
     map<string, string> header = 2;
     bytes body = 3;
@@ -38,7 +30,15 @@ message PutInput {
     string requiring_method = 6;
 }
 
-message DeleteInput {
+message PutRequest{
+    string url = 1;
+    map<string, string> header = 2;
+    bytes body = 3;
+    string requiring_endpoint = 5;
+    string requiring_method = 6;
+}
+
+message DeleteRequest {
     string url = 1;
     map<string, string> header = 2;
     string requiring_endpoint = 5;
@@ -64,9 +64,9 @@ message Status {
 }
 
 service CircuitBreaker {
-    rpc GeneralRequest(GeneralRequestInput) returns (Response) {}
-    rpc Get(GetInput) returns (Response) {}
-    rpc Post(PostInput) returns (Response) {}
-    rpc Put(PutInput) returns (Response) {}
-    rpc Delete(DeleteInput) returns (Response) {}
+    rpc General(GeneralRequest) returns (Response) {}
+    rpc Get(GetRequest) returns (Response) {}
+    rpc Post(PostRequest) returns (Response) {}
+    rpc Put(PutRequest) returns (Response) {}
+    rpc Delete(DeleteRequest) returns (Response) {}
 }

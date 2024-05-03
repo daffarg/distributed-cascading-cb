@@ -3,34 +3,24 @@ package service
 import (
 	"context"
 	"errors"
-	"strings"
-
 	"github.com/daffarg/distributed-cascading-cb/circuitbreaker"
 	"github.com/daffarg/distributed-cascading-cb/util"
 	"github.com/go-kit/log/level"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"strings"
 )
 
-type GeneralRequestReq struct {
-	Method            string            `json:"method" validate:"required"`
-	URL               string            `json:"url" validate:"required"`
+type request struct {
+	Method            string            `json:"method"`
+	URL               string            `json:"url"`
 	Header            map[string]string `json:"header"`
 	Body              []byte            `json:"body"`
 	RequiringEndpoint string            `json:"requiring_endpoint"`
 	RequiringMethod   string            `json:"requiring_method"`
 }
 
-func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*Response, error) {
-	if err := s.validator.Struct(req); err != nil {
-		level.Error(s.log).Log(
-			util.LogMessage, "failed precondition on request",
-			util.LogError, err,
-			util.LogRequest, req,
-		)
-		return &Response{}, status.Error(codes.FailedPrecondition, err.Error())
-	}
-
+func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (*Response, error) {
 	parsedUrl, err := util.GetGeneralURLFormat(req.URL)
 	if err != nil {
 		level.Error(s.log).Log(
@@ -82,7 +72,7 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 
 		// do request if error when getting cb status or cb status is not open
 		response, err := s.getCircuitBreaker(circuitBreakerName).Execute(func() (interface{}, error) {
-			return s.doRequest(ctx, req.Method, req.URL, req.Body, req.Header)
+			return s.httpRequest(ctx, req.Method, req.URL, req.Body, req.Header)
 		})
 		if err != nil {
 			if errors.Is(err, circuitbreaker.ErrOpenState) {
