@@ -18,7 +18,7 @@ func (s *service) doRequest(ctx context.Context, method, url string, body []byte
 		req.Header.Set(k, v)
 	}
 
-	req = req.WithContext(ctx)
+	req = req.Clone(ctx)
 
 	httpRes, err := client.Do(req)
 	if err != nil {

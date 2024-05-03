@@ -1,25 +1,25 @@
-FROM golang:1.21 as builder
-
-WORKDIR /app
-
-COPY go.mod go.sum ./
-
+FROM golang:1.21-alpine3.18 AS builder
+RUN apk add --no-progress --no-cache gcc musl-dev
+WORKDIR /build
+COPY . .
 RUN go mod download
 
-COPY . .
+RUN go build -tags musl -ldflags '-extldflags "-static"' -o /build/main
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o circuit-breaker .
-
-# Start a new stage from scratch
-FROM alpine:latest  
+FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
 # Copy the Pre-built binary file from the previous stage
-COPY --from=builder /app/circuit-breaker .
+COPY --from=builder /build/main .
 
 EXPOSE 5320
 
-CMD ["./circuit-breaker"]
+RUN apk add tzdata
+
+RUN cp /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
+
+
+CMD ["./main"]

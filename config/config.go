@@ -33,7 +33,9 @@ func (c *Config) Read(configPath string) error {
 
 	buf, err := os.ReadFile(configPath)
 	if err != nil {
-		return err
+		if os.IsNotExist(err) {
+			return nil
+		}
 	}
 
 	err = yaml.Unmarshal(buf, tmpConfig)
@@ -49,12 +51,11 @@ func (c *Config) Read(configPath string) error {
 		ep.Method = strings.ToUpper(ep.Method)
 		ep.Endpoint = util.FormEndpointName(strings.ToLower(parsedUrl), ep.Method)
 
-		parsedUrl, err = util.GetGeneralURLFormat(ep.Endpoint)
+		parsedUrl, err = util.GetGeneralURLFormat(ep.AlternativeEndpoint)
 		if err != nil {
 			return err
 		}
 		ep.AlternativeMethod = strings.ToUpper(ep.AlternativeMethod)
-		ep.AlternativeEndpoint = util.FormEndpointName(strings.ToLower(parsedUrl), ep.AlternativeMethod)
 
 		c.AlternativeEndpoints[ep.Endpoint] = ep
 	}
