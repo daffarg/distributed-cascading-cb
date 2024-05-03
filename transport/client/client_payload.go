@@ -39,6 +39,27 @@ func encodePostRequest(_ context.Context, grpcReq interface{}) (interface{}, err
 	}, nil
 }
 
+func encodePutRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+	req := grpcReq.(*service.PutRequest)
+	return &protobuf.PutRequest{
+		Url:               req.URL,
+		Header:            req.Header,
+		Body:              req.Body,
+		RequiringEndpoint: req.RequiringEndpoint,
+		RequiringMethod:   req.RequiringMethod,
+	}, nil
+}
+
+func encodeDeleteRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+	req := grpcReq.(*service.DeleteRequest)
+	return &protobuf.DeleteRequest{
+		Url:               req.URL,
+		Header:            req.Header,
+		RequiringEndpoint: req.RequiringEndpoint,
+		RequiringMethod:   req.RequiringMethod,
+	}, nil
+}
+
 func decodeResponse(_ context.Context, grpcRes interface{}) (interface{}, error) {
 	res := grpcRes.(*protobuf.Response)
 	return &service.Response{

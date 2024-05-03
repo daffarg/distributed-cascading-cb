@@ -43,6 +43,29 @@ func decodePostRequest(_ context.Context, r interface{}) (interface{}, error) {
 	}, nil
 }
 
+func decodePutRequest(_ context.Context, r interface{}) (interface{}, error) {
+	pbReq := r.(*protobuf.PutRequest)
+
+	return &service.PutRequest{
+		URL:               pbReq.Url,
+		Header:            pbReq.Header,
+		Body:              pbReq.Body,
+		RequiringEndpoint: pbReq.RequiringEndpoint,
+		RequiringMethod:   pbReq.RequiringMethod,
+	}, nil
+}
+
+func decodeDeleteRequest(_ context.Context, r interface{}) (interface{}, error) {
+	pbReq := r.(*protobuf.PutRequest)
+
+	return &service.DeleteRequest{
+		URL:               pbReq.Url,
+		Header:            pbReq.Header,
+		RequiringEndpoint: pbReq.RequiringEndpoint,
+		RequiringMethod:   pbReq.RequiringMethod,
+	}, nil
+}
+
 func encodeResponse(_ context.Context, r interface{}) (interface{}, error) {
 	res := r.(*service.Response)
 

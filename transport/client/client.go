@@ -51,9 +51,37 @@ func NewGRPCClient(conn *grpc.ClientConn) service.CircuitBreakerService {
 		).Endpoint()
 	}
 
+	var putEndpoint endpoint.Endpoint
+	{
+		putEndpoint = grpctransport.NewClient(
+			conn,
+			"protobuf.CircuitBreaker",
+			"Put",
+			encodePutRequest,
+			decodeResponse,
+			protobuf.Response{},
+			options...,
+		).Endpoint()
+	}
+
+	var deleteEndpoint endpoint.Endpoint
+	{
+		deleteEndpoint = grpctransport.NewClient(
+			conn,
+			"protobuf.CircuitBreaker",
+			"Delete",
+			encodeDeleteRequest,
+			decodeResponse,
+			protobuf.Response{},
+			options...,
+		).Endpoint()
+	}
+
 	return &cbEndpoint.CircuitBreakerEndpoint{
 		GeneralEp: generalEndpoint,
 		GetEp:     getEndpoint,
 		PostEp:    postEndpoint,
+		PutEp:     putEndpoint,
+		DeleteEp:  deleteEndpoint,
 	}
 }

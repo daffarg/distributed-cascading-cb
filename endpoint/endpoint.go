@@ -12,6 +12,8 @@ type CircuitBreakerEndpoint struct {
 	GeneralEp endpoint.Endpoint
 	GetEp     endpoint.Endpoint
 	PostEp    endpoint.Endpoint
+	PutEp     endpoint.Endpoint
+	DeleteEp  endpoint.Endpoint
 }
 
 func NewCircuitBreakerEndpoint(svc service.CircuitBreakerService, log log.Logger) (CircuitBreakerEndpoint, error) {
@@ -30,10 +32,22 @@ func NewCircuitBreakerEndpoint(svc service.CircuitBreakerService, log log.Logger
 		generalEp = makePostEndpoint(svc)
 	}
 
+	var putEp endpoint.Endpoint
+	{
+		putEp = makePutEndpoint(svc)
+	}
+
+	var deleteEp endpoint.Endpoint
+	{
+		putEp = makeDeleteEndpoint(svc)
+	}
+
 	return CircuitBreakerEndpoint{
 		GeneralEp: generalEp,
 		GetEp:     getEp,
 		PostEp:    postEp,
+		PutEp:     putEp,
+		DeleteEp:  deleteEp,
 	}, nil
 }
 
@@ -64,6 +78,24 @@ func (c *CircuitBreakerEndpoint) Post(ctx context.Context, req *service.PostRequ
 	return resp.(*service.Response), nil
 }
 
+func (c *CircuitBreakerEndpoint) Put(ctx context.Context, req *service.PutRequest) (*service.Response, error) {
+	resp, err := c.PutEp(ctx, req)
+	if err != nil {
+		return &service.Response{}, err
+	}
+
+	return resp.(*service.Response), nil
+}
+
+func (c *CircuitBreakerEndpoint) Delete(ctx context.Context, req *service.DeleteRequest) (*service.Response, error) {
+	resp, err := c.DeleteEp(ctx, req)
+	if err != nil {
+		return &service.Response{}, err
+	}
+
+	return resp.(*service.Response), nil
+}
+
 func makeGeneralEndpoint(svc service.CircuitBreakerService) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
 		req := request.(*service.GeneralRequest)
@@ -82,5 +114,19 @@ func makePostEndpoint(svc service.CircuitBreakerService) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
 		req := request.(*service.PostRequest)
 		return svc.Post(ctx, req)
+	}
+}
+
+func makePutEndpoint(svc service.CircuitBreakerService) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*service.PutRequest)
+		return svc.Put(ctx, req)
+	}
+}
+
+func makeDeleteEndpoint(svc service.CircuitBreakerService) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*service.DeleteRequest)
+		return svc.Delete(ctx, req)
 	}
 }

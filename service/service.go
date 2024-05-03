@@ -17,6 +17,8 @@ type CircuitBreakerService interface {
 	General(ctx context.Context, req *GeneralRequest) (*Response, error)
 	Get(ctx context.Context, req *GetRequest) (*Response, error)
 	Post(ctx context.Context, req *PostRequest) (*Response, error)
+	Put(ctx context.Context, req *PutRequest) (*Response, error)
+	Delete(ctx context.Context, req *DeleteRequest) (*Response, error)
 }
 
 type service struct {
