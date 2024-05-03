@@ -8,15 +8,16 @@ import (
 )
 
 type handleRequestedEndpointReq struct {
-	RequestedEndpoint  string
-	RequestedMethod    string
-	CircuitBreakerName string
+	RequestedEndpoint   string
+	RequestedMethod     string
+	CircuitBreakerName  string
+	IsAlreadySubscribed bool
 }
 
 func (s *service) handleRequestedEndpoint(ctx context.Context, req *handleRequestedEndpointReq) {
 	requiringEndpointsKey := util.FormRequiringEndpointsKey(req.CircuitBreakerName)
 
-	isNewValue, err := s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), requiringEndpointsKey, req.CircuitBreakerName)
+	_, err := s.repository.AddMembersIntoSet(context.WithoutCancel(ctx), requiringEndpointsKey, req.CircuitBreakerName)
 	if err != nil {
 		level.Error(s.log).Log(
 			util.LogMessage, "failed to add requiring endpoint into set",
@@ -25,7 +26,7 @@ func (s *service) handleRequestedEndpoint(ctx context.Context, req *handleReques
 		)
 	}
 
-	if isNewValue == 1 {
+	if !req.IsAlreadySubscribed {
 		encodedTopic := base58.Encode([]byte(req.CircuitBreakerName))
 		go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
 	}

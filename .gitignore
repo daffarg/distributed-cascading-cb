@@ -24,9 +24,12 @@ go.work
 .vscode
 
 .env
+client.properties
+config.yaml
 
 client.properties
 config.yaml
 
 logs
+
 

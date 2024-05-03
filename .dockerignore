@@ -1,7 +1,9 @@
-.env
 .git
 .gitignore
 README.md
 .vscode
 .idea
 logs/*.log
+client.properties
+config.yaml
+.env

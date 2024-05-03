@@ -6,14 +6,15 @@ import (
 )
 
 type Response struct {
-	Status        string            `json:"status"`
-	StatusCode    int32             `json:"status_code"`
-	Proto         string            `json:"proto"`
-	ProtoMajor    int32             `json:"proto_major"`
-	ProtoMinor    int32             `json:"proto_minor"`
-	Header        map[string]string `json:"header"`
-	Body          []byte            `json:"body"`
-	ContentLength int64             `json:"content_length"`
+	Status                    string            `json:"status"`
+	StatusCode                int32             `json:"status_code"`
+	Proto                     string            `json:"proto"`
+	ProtoMajor                int32             `json:"proto_major"`
+	ProtoMinor                int32             `json:"proto_minor"`
+	Header                    map[string]string `json:"header"`
+	Body                      []byte            `json:"body"`
+	ContentLength             int64             `json:"content_length"`
+	IsFromAlternativeEndpoint bool              `json:"is_from_alternative_endpoint"`
 }
 
 func (s *service) convertToResponse(res *http.Response) (Response, error) {
