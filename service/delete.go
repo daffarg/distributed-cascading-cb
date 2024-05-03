@@ -26,7 +26,7 @@ func (s *service) Delete(ctx context.Context, req *DeleteRequest) (*Response, er
 	}
 
 	requestQuery := &request{
-		Method:            util.Get,
+		Method:            util.Delete,
 		URL:               req.URL,
 		Header:            req.Header,
 		RequiringEndpoint: req.RequiringEndpoint,
