@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func (s *service) doRequest(ctx context.Context, method, url string, body []byte, header map[string]string) (*Response, error) {
+func (s *service) httpRequest(ctx context.Context, method, url string, body []byte, header map[string]string) (*Response, error) {
 	client := s.httpClient
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
 	if err != nil {

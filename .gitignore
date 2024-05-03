@@ -25,5 +25,8 @@ go.work
 
 .env
 
+client.properties
+config.yaml
+
 logs
 

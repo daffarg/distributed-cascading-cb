@@ -12,13 +12,39 @@ import (
 func NewGRPCClient(conn *grpc.ClientConn) service.CircuitBreakerService {
 	var options []grpctransport.ClientOption
 
-	var generalRequestEndpoint endpoint.Endpoint
+	var generalEndpoint endpoint.Endpoint
 	{
-		generalRequestEndpoint = grpctransport.NewClient(
+		generalEndpoint = grpctransport.NewClient(
 			conn,
 			"protobuf.CircuitBreaker",
-			"GeneralRequest",
-			encodeGeneralRequestReq,
+			"General",
+			encodeGeneralRequest,
+			decodeResponse,
+			protobuf.Response{},
+			options...,
+		).Endpoint()
+	}
+
+	var getEndpoint endpoint.Endpoint
+	{
+		getEndpoint = grpctransport.NewClient(
+			conn,
+			"protobuf.CircuitBreaker",
+			"Get",
+			encodeGetRequest,
+			decodeResponse,
+			protobuf.Response{},
+			options...,
+		).Endpoint()
+	}
+
+	var postEndpoint endpoint.Endpoint
+	{
+		postEndpoint = grpctransport.NewClient(
+			conn,
+			"protobuf.CircuitBreaker",
+			"Post",
+			encodePostRequest,
 			decodeResponse,
 			protobuf.Response{},
 			options...,
@@ -26,6 +52,8 @@ func NewGRPCClient(conn *grpc.ClientConn) service.CircuitBreakerService {
 	}
 
 	return &cbEndpoint.CircuitBreakerEndpoint{
-		GeneralRequestEp: generalRequestEndpoint,
+		GeneralEp: generalEndpoint,
+		GetEp:     getEndpoint,
+		PostEp:    postEndpoint,
 	}
 }

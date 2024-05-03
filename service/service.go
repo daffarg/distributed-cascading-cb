@@ -14,7 +14,9 @@ import (
 )
 
 type CircuitBreakerService interface {
-	GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*Response, error)
+	General(ctx context.Context, req *GeneralRequest) (*Response, error)
+	Get(ctx context.Context, req *GetRequest) (*Response, error)
+	Post(ctx context.Context, req *PostRequest) (*Response, error)
 }
 
 type service struct {

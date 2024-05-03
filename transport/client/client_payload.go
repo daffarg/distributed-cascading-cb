@@ -6,10 +6,31 @@ import (
 	"github.com/daffarg/distributed-cascading-cb/service"
 )
 
-func encodeGeneralRequestReq(_ context.Context, grpcReq interface{}) (interface{}, error) {
-	req := grpcReq.(*service.GeneralRequestReq)
-	return &protobuf.GeneralRequestInput{
+func encodeGeneralRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+	req := grpcReq.(*service.GeneralRequest)
+	return &protobuf.GeneralRequest{
 		Method:            req.Method,
+		Url:               req.URL,
+		Header:            req.Header,
+		Body:              req.Body,
+		RequiringEndpoint: req.RequiringEndpoint,
+		RequiringMethod:   req.RequiringMethod,
+	}, nil
+}
+
+func encodeGetRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+	req := grpcReq.(*service.GetRequest)
+	return &protobuf.GetRequest{
+		Url:               req.URL,
+		Header:            req.Header,
+		RequiringEndpoint: req.RequiringEndpoint,
+		RequiringMethod:   req.RequiringMethod,
+	}, nil
+}
+
+func encodePostRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+	req := grpcReq.(*service.PostRequest)
+	return &protobuf.PostRequest{
 		Url:               req.URL,
 		Header:            req.Header,
 		Body:              req.Body,

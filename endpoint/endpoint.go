@@ -9,22 +9,36 @@ import (
 )
 
 type CircuitBreakerEndpoint struct {
-	GeneralRequestEp endpoint.Endpoint
+	GeneralEp endpoint.Endpoint
+	GetEp     endpoint.Endpoint
+	PostEp    endpoint.Endpoint
 }
 
 func NewCircuitBreakerEndpoint(svc service.CircuitBreakerService, log log.Logger) (CircuitBreakerEndpoint, error) {
-	var generalRequestEp endpoint.Endpoint
+	var generalEp endpoint.Endpoint
 	{
-		generalRequestEp = makeGeneralRequestEndpoint(svc)
+		generalEp = makeGeneralEndpoint(svc)
+	}
+
+	var getEp endpoint.Endpoint
+	{
+		generalEp = makeGetEndpoint(svc)
+	}
+
+	var postEp endpoint.Endpoint
+	{
+		generalEp = makePostEndpoint(svc)
 	}
 
 	return CircuitBreakerEndpoint{
-		GeneralRequestEp: generalRequestEp,
+		GeneralEp: generalEp,
+		GetEp:     getEp,
+		PostEp:    postEp,
 	}, nil
 }
 
-func (c *CircuitBreakerEndpoint) GeneralRequest(ctx context.Context, req *service.GeneralRequestReq) (*service.Response, error) {
-	resp, err := c.GeneralRequestEp(ctx, req)
+func (c *CircuitBreakerEndpoint) General(ctx context.Context, req *service.GeneralRequest) (*service.Response, error) {
+	resp, err := c.GeneralEp(ctx, req)
 	if err != nil {
 		return &service.Response{}, err
 	}
@@ -32,9 +46,41 @@ func (c *CircuitBreakerEndpoint) GeneralRequest(ctx context.Context, req *servic
 	return resp.(*service.Response), nil
 }
 
-func makeGeneralRequestEndpoint(svc service.CircuitBreakerService) endpoint.Endpoint {
+func (c *CircuitBreakerEndpoint) Get(ctx context.Context, req *service.GetRequest) (*service.Response, error) {
+	resp, err := c.GetEp(ctx, req)
+	if err != nil {
+		return &service.Response{}, err
+	}
+
+	return resp.(*service.Response), nil
+}
+
+func (c *CircuitBreakerEndpoint) Post(ctx context.Context, req *service.PostRequest) (*service.Response, error) {
+	resp, err := c.PostEp(ctx, req)
+	if err != nil {
+		return &service.Response{}, err
+	}
+
+	return resp.(*service.Response), nil
+}
+
+func makeGeneralEndpoint(svc service.CircuitBreakerService) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		req := request.(*service.GeneralRequestReq)
-		return svc.GeneralRequest(ctx, req)
+		req := request.(*service.GeneralRequest)
+		return svc.General(ctx, req)
+	}
+}
+
+func makeGetEndpoint(svc service.CircuitBreakerService) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*service.GetRequest)
+		return svc.Get(ctx, req)
+	}
+}
+
+func makePostEndpoint(svc service.CircuitBreakerService) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(*service.PostRequest)
+		return svc.Post(ctx, req)
 	}
 }
