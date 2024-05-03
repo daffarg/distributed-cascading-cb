@@ -54,6 +54,7 @@ message Response {
     map<string, string> header = 6;
     bytes body = 7;
     int64 content_length = 8;
+    bool is_from_alternative_endpoint = 9;
 }
 
 message Status {

@@ -6,8 +6,20 @@ RUN go mod download
 
 RUN go build -tags musl -ldflags '-extldflags "-static"' -o /build/main
 
-FROM scratch
-WORKDIR /app
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+# Copy the Pre-built binary file from the previous stage
 COPY --from=builder /build/main .
+
 EXPOSE 5320
-ENTRYPOINT ["/app/main"]
+
+RUN apk add tzdata
+
+RUN cp /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
+
+
+CMD ["./main"]

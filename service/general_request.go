@@ -55,10 +55,17 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 		CircuitBreakerName: circuitBreakerName,
 	})
 
+	isAlreadySubscribed := false
+	_, ok := s.breakers[circuitBreakerName]
+	if ok {
+		isAlreadySubscribed = true
+	}
+
 	go s.handleRequestedEndpoint(ctx, &handleRequestedEndpointReq{
-		RequestedEndpoint:  req.URL,
-		RequestedMethod:    req.Method,
-		CircuitBreakerName: circuitBreakerName,
+		RequestedEndpoint:   req.URL,
+		RequestedMethod:     req.Method,
+		CircuitBreakerName:  circuitBreakerName,
+		IsAlreadySubscribed: isAlreadySubscribed,
 	})
 
 	altEndpoint, hasAltEp := s.config.AlternativeEndpoints[circuitBreakerName]
@@ -88,6 +95,7 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 					if err != nil {
 						return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteAltEndpoint.Error())
 					}
+					res.IsFromAlternativeEndpoint = true
 					return res, nil
 				}
 			}
@@ -107,6 +115,7 @@ func (s *service) GeneralRequest(ctx context.Context, req *GeneralRequestReq) (*
 		if err != nil {
 			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteAltEndpoint.Error())
 		}
+		res.IsFromAlternativeEndpoint = true
 		return res, nil
 	}
 

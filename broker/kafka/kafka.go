@@ -55,14 +55,14 @@ func NewKafkaBroker(log log.Logger, configPath string) (broker.MessageBroker, er
 func (k *kafkaBroker) Publish(ctx context.Context, topic string, message *protobuf.Status) error {
 	adminClient, err := kafka.NewAdminClient(&k.config)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer adminClient.Close()
 
 	topicSpecification := []kafka.TopicSpecification{{
 		Topic:             topic,
 		NumPartitions:     1,
-		ReplicationFactor: 2,
+		ReplicationFactor: 3,
 	}}
 
 	results, err := adminClient.CreateTopics(ctx, topicSpecification)
@@ -74,7 +74,7 @@ func (k *kafkaBroker) Publish(ctx context.Context, topic string, message *protob
 		level.Info(k.log).Log(
 			util.LogMessage, "result of kafka topic creation",
 			util.LogTopic, result.Topic,
-			util.LogErrorResult, result.Error,
+			util.LogResult, result.Error,
 		)
 	}
 
@@ -100,17 +100,80 @@ func (k *kafkaBroker) Publish(ctx context.Context, topic string, message *protob
 }
 
 func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler func(ctx context.Context, key, value string, exp time.Duration) error) {
-	k.config["auto.offset.reset"] = "latest"
-	k.config["enable.auto.commit"] = "false"
-
-	consumer, _ := kafka.NewConsumer(&k.config)
-	err := consumer.SubscribeTopics([]string{topic}, nil)
+	adminClient, err := kafka.NewAdminClient(&k.config)
 	if err != nil {
 		level.Error(k.log).Log(
-			util.LogMessage, "failed to subscribe to topic",
+			util.LogMessage, "failed to get kafka admin client",
 			util.LogTopic, topic,
 			util.LogError, err,
 		)
+	} else {
+		metadata, err := adminClient.GetMetadata(&topic, false, util.GetIntEnv("KAFKA_GET_METADATA_TIMEOUT", 30000))
+		if err != nil {
+			level.Error(k.log).Log(
+				util.LogMessage, "failed to get metadata of kafka topic",
+				util.LogTopic, topic,
+				util.LogError, err,
+			)
+		}
+
+		level.Info(k.log).Log(
+			util.LogMessage, "metadata of kafka topic",
+			util.LogTopic, topic,
+			util.LogMetadata, metadata,
+		)
+
+		if len(metadata.Topics[topic].Partitions) <= 0 { // determine if the topic not exists
+			level.Info(k.log).Log(
+				util.LogMessage, "kafka topic not found, will be creating the topic",
+				util.LogTopic, topic,
+			)
+
+			topicSpecification := []kafka.TopicSpecification{{
+				Topic:             topic,
+				NumPartitions:     1,
+				ReplicationFactor: 3,
+			}}
+
+			results, err := adminClient.CreateTopics(ctx, topicSpecification)
+			if err != nil {
+				level.Error(k.log).Log(
+					util.LogMessage, "failed to create a new kafka topic",
+					util.LogTopic, topic,
+					util.LogError, err,
+				)
+			}
+
+			for _, result := range results {
+				level.Info(k.log).Log(
+					util.LogMessage, "result of kafka topic creation",
+					util.LogTopic, result.Topic,
+					util.LogResult, result.Error,
+				)
+			}
+		}
+
+		adminClient.Close()
+	}
+
+	k.config["auto.offset.reset"] = "latest"
+	k.config["enable.auto.commit"] = "false"
+	k.config["allow.auto.create.topics"] = "true"
+
+	consumer, _ := kafka.NewConsumer(&k.config)
+
+	for {
+		err := consumer.SubscribeTopics([]string{topic}, nil)
+		if err != nil {
+			level.Warn(k.log).Log(
+				util.LogMessage, "failed to subscribe to topic",
+				util.LogTopic, topic,
+				util.LogError, err,
+			)
+			time.Sleep(time.Duration(util.GetIntEnv("RETRY_SUBSCRIBE_INTERVAL", 10)) * time.Second)
+		} else {
+			break
+		}
 	}
 	defer consumer.Close()
 
@@ -134,7 +197,7 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 				continue
 			}
 
-			err = handler(context.WithoutCancel(ctx), topic, msg.Status, time.Duration(msg.Timeout)*time.Second)
+			err = handler(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, time.Duration(msg.Timeout)*time.Second)
 			if err != nil {
 				level.Error(k.log).Log(
 					util.LogMessage, "failed to store circuit breaker status into db",
@@ -161,201 +224,3 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 		}
 	}
 }
-
-//func (k *kafkaBroker) Publish(ctx context.Context, topic string, message *protobuf.Status) error {
-//	conn, err := k.dialer.Dial(
-//		"tcp",
-//		k.config["bootstrap.servers"],
-//	)
-//	if err != nil {
-//		return err
-//	}
-//	defer conn.Close()
-//
-//	controller, err := conn.Controller()
-//	if err != nil {
-//		return err
-//	}
-//	var controllerConn *kafka.Conn
-//	controllerConn, err = k.dialer.Dial(
-//		"tcp",
-//		net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)),
-//	)
-//	if err != nil {
-//		return err
-//	}
-//	defer controllerConn.Close()
-//
-//	topicConfigs := []kafka.TopicConfig{
-//		{
-//			Topic:             topic,
-//			NumPartitions:     1,
-//			ReplicationFactor: 3,
-//		},
-//	}
-//
-//	err = controllerConn.CreateTopics(topicConfigs...)
-//	if err != nil {
-//		return err
-//	}
-//
-//	buf, err := proto.Marshal(message)
-//	if err != nil {
-//		return err
-//	}
-//
-//	leaderConn, err := k.dialer.DialLeader(
-//		ctx,
-//		"tcp",
-//		net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)),
-//		topic,
-//		0,
-//	)
-//	if err != nil {
-//		return err
-//	}
-//
-//	_, err = leaderConn.WriteMessages(kafka.Message{
-//		Value: buf,
-//	})
-//	if err != nil {
-//		return err
-//	}
-//
-//	return nil
-//}
-//
-//func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler func(ctx context.Context, key, value string, exp time.Duration) error) {
-//	conn, err := k.dialer.Dial(
-//		"tcp",
-//		k.config["bootstrap.servers"],
-//	)
-//	if err != nil {
-//		level.Error(k.log).Log(
-//			util.LogMessage, "failed to dial kafka brokers",
-//			util.LogError, err,
-//			util.LogTopic, topic,
-//		)
-//	} else {
-//		defer conn.Close()
-//	}
-//
-//	controller, err := conn.Controller()
-//	if err != nil {
-//		level.Error(k.log).Log(
-//			util.LogMessage, "failed to get kafka controller",
-//			util.LogError, err,
-//			util.LogTopic, topic,
-//		)
-//	}
-//
-//	leaderConn, err := k.dialer.DialLeader(
-//		ctx,
-//		"tcp",
-//		net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)),
-//		topic,
-//		0,
-//	)
-//	if err != nil {
-//		level.Error(k.log).Log(
-//			util.LogMessage, "failed to dial kafka leader",
-//			util.LogError, err,
-//			util.LogTopic, topic,
-//		)
-//	} else {
-//		defer leaderConn.Close()
-//	}
-//
-//	batch := conn.ReadBatch(10, 1e6)
-//	defer batch.Close()
-//
-//	b := make([]byte, 10e3) // 10KB max per message
-//	for {
-//		_, err := batch.Read(b)
-//		if err != nil {
-//			level.Error(k.log).Log(
-//				util.LogMessage, "failed to read kafka message",
-//				util.LogError, err,
-//				util.LogTopic, topic,
-//			)
-//			continue
-//		}
-//
-//		msg := &protobuf.Status{}
-//		err = proto.Unmarshal(b, msg)
-//		if err != nil {
-//			level.Error(k.log).Log(
-//				util.LogMessage, "failed to unmarshal kafka message",
-//				util.LogError, err,
-//				util.LogTopic, topic,
-//			)
-//			continue
-//		}
-//
-//		err = handler(context.WithoutCancel(ctx), topic, msg.Status, time.Duration(msg.Timeout)*time.Second)
-//		if err != nil {
-//			level.Error(k.log).Log(
-//				util.LogMessage, "failed to store circuit breaker status into db",
-//				util.LogError, err,
-//				util.LogTopic, topic,
-//			)
-//		}
-//	}
-//
-//	//reader := kafka.NewReader(kafka.ReaderConfig{
-//	//	Dialer:      k.dialer,
-//	//	GroupID:     k.consumerGroup,
-//	//	Brokers:     []string{k.config["bootstrap.servers"]},
-//	//	Topic:       topic,
-//	//	StartOffset: kafka.LastOffset,
-//	//	Partition:   0,
-//	//})
-//	//
-//	//level.Info(k.log).Log(
-//	//	util.LogMessage, "subscribing to topic",
-//	//	util.LogTopic, topic,
-//	//)
-//	//
-//	//go func() {
-//	//	for {
-//	//		kafkaMsg, err := reader.FetchMessage(context.WithoutCancel(ctx))
-//	//		if err != nil {
-//	//			level.Error(k.log).Log(
-//	//				util.LogMessage, "failed to read circuit breaker status from message broker",
-//	//				util.LogError, err,
-//	//				util.LogTopic, topic,
-//	//			)
-//	//		}
-//	//
-//	//		msg := &protobuf.Status{}
-//	//		err = proto.Unmarshal(kafkaMsg.Value, msg)
-//	//		if err != nil {
-//	//			continue
-//	//		}
-//	//
-//	//		err = handler(context.WithoutCancel(ctx), topic, msg.Status, time.Duration(msg.Timeout)*time.Second)
-//	//		if err != nil {
-//	//			level.Error(k.log).Log(
-//	//				util.LogMessage, "failed to store circuit breaker status into db",
-//	//				util.LogError, err,
-//	//				util.LogTopic, topic,
-//	//			)
-//	//		}
-//	//		err = reader.CommitMessages(ctx, kafkaMsg)
-//	//		if err != nil {
-//	//			level.Error(k.log).Log(
-//	//				util.LogMessage, "failed to commit message",
-//	//				util.LogError, err,
-//	//				util.LogTopic, topic,
-//	//			)
-//	//		} else {
-//	//			level.Info(k.log).Log(
-//	//				util.LogMessage, "received and committed a message",
-//	//				util.LogTopic, topic,
-//	//				util.LogStatus, msg,
-//	//			)
-//	//		}
-//	//
-//	//	}
-//	//}()
-//}

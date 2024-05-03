@@ -13,7 +13,8 @@ const (
 	LogCircuitBreakerNewStatus = "circuit_breaker_new_status"
 	LogAlternativeEndpoint     = "alternative_endpoint"
 	LogStatus                  = "status"
-	LogErrorResult             = "error_result"
+	LogResult                  = "result"
+	LogMetadata                = "metadata"
 )
 
 const (

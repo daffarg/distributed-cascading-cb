@@ -50,7 +50,7 @@ func main() {
 
 		logfile, err := os.OpenFile(filepath.Join(logDir, util.GetEnv("LOG_FILE_NAME", "app.log")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
-			fmt.Printf("error opening log file: %v", err)
+			fmt.Printf("error opening log file: %v\n", err)
 			os.Exit(1)
 		}
 		defer logfile.Close()
