@@ -24,12 +24,12 @@ func NewCircuitBreakerEndpoint(svc service.CircuitBreakerService, log log.Logger
 
 	var getEp endpoint.Endpoint
 	{
-		generalEp = makeGetEndpoint(svc)
+		getEp = makeGetEndpoint(svc)
 	}
 
 	var postEp endpoint.Endpoint
 	{
-		generalEp = makePostEndpoint(svc)
+		postEp = makePostEndpoint(svc)
 	}
 
 	var putEp endpoint.Endpoint
@@ -39,7 +39,7 @@ func NewCircuitBreakerEndpoint(svc service.CircuitBreakerService, log log.Logger
 
 	var deleteEp endpoint.Endpoint
 	{
-		putEp = makeDeleteEndpoint(svc)
+		deleteEp = makeDeleteEndpoint(svc)
 	}
 
 	return CircuitBreakerEndpoint{
