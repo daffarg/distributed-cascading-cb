@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"strings"
+	"time"
 )
 
 type request struct {
@@ -38,6 +39,33 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 
 	circuitBreakerName := util.FormEndpointName(parsedUrl, req.Method)
 	endpointStatusKey := util.FormEndpointStatusKey(circuitBreakerName)
+
+	topic := util.EncodeTopic(circuitBreakerName)
+	msg, err := s.broker.Subscribe(ctx, topic)
+	if err != nil {
+		level.Error(s.log).Log(
+			util.LogMessage, "failed to subscribe to topic",
+			util.LogError, err,
+			util.LogRequest, req,
+			util.LogTopic, topic,
+		)
+		return &Response{}, status.Error(codes.Internal, util.ErrFailedSubscribe.Error())
+	}
+
+	if msg.Status == circuitbreaker.StateOpen.String() {
+		err = s.repository.SetWithExp(ctx, util.FormEndpointStatusKey(msg.Endpoint), msg.Status, time.Duration(msg.Timeout)*time.Second)
+		if err != nil {
+			level.Error(s.log).Log(
+				util.LogMessage, "failed to store circuit breaker status into db",
+				util.LogError, err,
+				util.LogRequest, req,
+				util.LogTopic, topic,
+				util.LogStatus, msg,
+			)
+		}
+
+		return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
+	}
 
 	go s.handleRequiringEndpoint(ctx, &handleRequiringEndpointReq{
 		RequiringEndpoint:  req.RequiringEndpoint,

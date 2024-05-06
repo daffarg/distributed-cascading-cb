@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"github.com/btcsuite/btcd/btcutil/base58"
 	"net/url"
 	"os"
 	"strconv"
@@ -49,4 +50,8 @@ func FormEndpointStatusKey(endpointName string) string {
 
 func FormRequiringEndpointsKey(endpointName string) string {
 	return fmt.Sprintf("requirings:%s", endpointName)
+}
+
+func EncodeTopic(topic string) string {
+	return base58.Encode([]byte(topic))
 }

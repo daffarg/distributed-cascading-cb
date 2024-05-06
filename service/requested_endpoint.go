@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"github.com/btcsuite/btcd/btcutil/base58"
 	"github.com/daffarg/distributed-cascading-cb/util"
 	"github.com/go-kit/log/level"
 )
@@ -27,7 +26,7 @@ func (s *service) handleRequestedEndpoint(ctx context.Context, req *handleReques
 	}
 
 	if !req.IsAlreadySubscribed {
-		encodedTopic := base58.Encode([]byte(req.CircuitBreakerName))
+		encodedTopic := util.EncodeTopic(req.CircuitBreakerName)
 		go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
 	}
 }
