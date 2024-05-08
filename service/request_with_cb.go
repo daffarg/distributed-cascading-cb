@@ -40,15 +40,13 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 	circuitBreakerName := util.FormEndpointName(parsedUrl, req.Method)
 	endpointStatusKey := util.FormEndpointStatusKey(circuitBreakerName)
 
-	isExist, err := s.repository.IsKeyExist(ctx, util.FormRequiringEndpointsKey(circuitBreakerName))
-	if err != nil {
-		level.Error(s.log).Log(
-			util.LogMessage, "failed to check if requiring endpoint key exists",
-			util.LogError, err,
-			util.LogRequest, req,
-		)
+	isAlreadySubscribed := false
+	_, ok := s.subscribeMap[circuitBreakerName]
+	if ok {
+		isAlreadySubscribed = true
 	}
-	if !isExist {
+
+	if !isAlreadySubscribed {
 		topic := util.EncodeTopic(circuitBreakerName)
 		msg, err := s.broker.Subscribe(ctx, topic)
 		if err != nil {
@@ -85,12 +83,6 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 		RequiringMethod:    req.RequiringMethod,
 		CircuitBreakerName: circuitBreakerName,
 	})
-
-	isAlreadySubscribed := false
-	_, ok := s.breakers[circuitBreakerName]
-	if ok {
-		isAlreadySubscribed = true
-	}
 
 	go s.handleRequestedEndpoint(ctx, &handleRequestedEndpointReq{
 		RequestedEndpoint:   req.URL,

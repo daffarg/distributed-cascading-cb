@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/daffarg/distributed-cascading-cb/util"
+	"github.com/go-kit/log/level"
 )
 
 func (s *service) initSubscribe(ctx context.Context) error {
@@ -13,9 +14,22 @@ func (s *service) initSubscribe(ctx context.Context) error {
 	}
 
 	for _, key := range keys {
-		topic := util.GetEndpointFromRequiringsKey(key)
-		encodedTopic := util.EncodeTopic(topic)
-		go s.broker.SubscribeAsync(ctx, encodedTopic, s.repository.SetWithExp)
+		endpoints, err := s.repository.GetMemberOfSet(ctx, key)
+		if err != nil {
+			level.Error(s.log).Log(
+				util.LogMessage, "failed to get members of set",
+				util.LogError, err,
+				util.LogKey, key,
+			)
+		}
+		endpoint := util.GetEndpointFromRequiringsKey(key)
+		for _, ep := range endpoints {
+			if ep != endpoint {
+				s.subscribeMap[ep] = true
+				encodedTopic := util.EncodeTopic(ep)
+				go s.broker.SubscribeAsync(ctx, encodedTopic, s.repository.SetWithExp)
+			}
+		}
 	}
 
 	return nil

@@ -44,14 +44,15 @@ func NewCircuitBreakerService(
 	config *config.Config,
 ) CircuitBreakerService {
 	svc := &service{
-		log:        log,
-		validator:  validator,
-		repository: repository,
-		broker:     broker,
-		breakers:   make(map[string]*circuitbreaker.CircuitBreaker),
-		httpClient: httpClient,
-		tracer:     tracer,
-		config:     config,
+		log:          log,
+		validator:    validator,
+		repository:   repository,
+		broker:       broker,
+		breakers:     make(map[string]*circuitbreaker.CircuitBreaker),
+		httpClient:   httpClient,
+		tracer:       tracer,
+		config:       config,
+		subscribeMap: make(map[string]bool),
 	}
 
 	svc.initConfig(context.Background())

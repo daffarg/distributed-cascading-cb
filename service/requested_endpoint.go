@@ -26,6 +26,7 @@ func (s *service) handleRequestedEndpoint(ctx context.Context, req *handleReques
 	}
 
 	if !req.IsAlreadySubscribed {
+		s.subscribeMap[req.CircuitBreakerName] = true
 		encodedTopic := util.EncodeTopic(req.CircuitBreakerName)
 		go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
 	}

@@ -17,6 +17,7 @@ const (
 	LogMetadata                = "metadata"
 	LogEndpoint                = "endpoint"
 	LogConfig                  = "config"
+	LogKey                     = "key"
 )
 
 const (
