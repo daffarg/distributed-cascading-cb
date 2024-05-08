@@ -46,9 +46,10 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 							go func() {
 								encodedTopic := util.EncodeTopic(ep)
 								message := &protobuf.Status{
-									Endpoint: ep,
-									Status:   to.String(),
-									Timeout:  uint32(util.GetIntEnv("CB_TIMEOUT", 60)),
+									Endpoint:  ep,
+									Status:    to.String(),
+									Timeout:   uint32(util.GetIntEnv("CB_TIMEOUT", 60)),
+									Timestamp: time.Now().Format(time.RFC3339),
 								}
 								if err != nil {
 									level.Error(s.log).Log(

@@ -61,6 +61,7 @@ message Status {
     string endpoint = 1;
     string status = 2;
     uint32 timeout = 3;
+    string timestamp = 4;
 }
 
 service CircuitBreaker {
