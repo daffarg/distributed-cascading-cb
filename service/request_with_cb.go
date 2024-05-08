@@ -60,9 +60,11 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 			}
 		} else {
 			timestamp, _ := time.Parse(time.RFC3339, msg.Timestamp)
-			if timestamp.Add(time.Duration(msg.Timeout) * time.Second).Before(time.Now()) {
+			expiredTime := timestamp.Add(time.Duration(msg.Timeout) * time.Second)
+			if time.Now().Before(expiredTime) {
+				timeout := expiredTime.Sub(time.Now()) * time.Second
 				go func() {
-					err = s.repository.SetWithExp(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, time.Duration(msg.Timeout)*time.Second)
+					err = s.repository.SetWithExp(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, timeout)
 					if err != nil {
 						level.Error(s.log).Log(
 							util.LogMessage, "failed to store circuit breaker status into db",

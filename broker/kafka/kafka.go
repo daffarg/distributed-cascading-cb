@@ -260,8 +260,10 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 			}
 
 			timestamp, _ := time.Parse(time.RFC3339, msg.Timestamp)
-			if timestamp.Add(time.Duration(msg.Timeout) * time.Second).Before(time.Now()) {
-				err = handler(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, time.Duration(msg.Timeout)*time.Second)
+			expiredTime := timestamp.Add(time.Duration(msg.Timeout) * time.Second)
+			if time.Now().Before(expiredTime) {
+				timeout := expiredTime.Sub(time.Now()) * time.Second
+				err = handler(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, timeout)
 				if err != nil {
 					level.Error(k.log).Log(
 						util.LogMessage, "failed to store circuit breaker status into db",
