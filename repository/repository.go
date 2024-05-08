@@ -13,4 +13,6 @@ type Repository interface {
 	IsMemberOfSet(ctx context.Context, key, value string) (bool, error)
 	IsMembersOfSet(ctx context.Context, key string, value ...string) ([]bool, error)
 	GetMemberOfSet(ctx context.Context, key string) ([]string, error)
+	IsKeyExist(ctx context.Context, key string) (bool, error)
+	Scan(ctx context.Context, pattern string, count int64) ([]string, error)
 }

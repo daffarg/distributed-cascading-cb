@@ -75,16 +75,14 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 								}
 							}()
 
-							if ep != name {
-								err = s.repository.SetWithExp(context.Background(), util.FormEndpointStatusKey(ep), to.String(), timeout)
-								if err != nil {
-									level.Error(s.log).Log(
-										util.LogMessage, "failed to set circuit breaker status to db",
-										util.LogError, err,
-										util.LogCircuitBreakerEndpoint, name,
-										util.LogCircuitBreakerNewStatus, to.String(),
-									)
-								}
+							err = s.repository.SetWithExp(context.Background(), util.FormEndpointStatusKey(ep), to.String(), timeout)
+							if err != nil {
+								level.Error(s.log).Log(
+									util.LogMessage, "failed to set circuit breaker status to db",
+									util.LogError, err,
+									util.LogCircuitBreakerEndpoint, name,
+									util.LogCircuitBreakerNewStatus, to.String(),
+								)
 							}
 						}
 					}()

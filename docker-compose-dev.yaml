@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  circuit-breaker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5320:5320"
+    volumes:
+      - ./config.yaml:/root/config.yaml
+      - ./client.properties:/root/client.properties
+      - ./.env:/root/.env
+    networks:
+      - default
+    depends_on:
+      - kvrocks
+  kvrocks:
+    image: apache/kvrocks
+    ports:
+      - "6666:6666"
+    networks:
+      - default
+networks:
+  default:
+    driver: bridge

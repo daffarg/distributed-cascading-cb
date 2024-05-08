@@ -112,7 +112,7 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.St
 	}
 
 	if len(metadata.Topics[topic].Partitions) <= 0 {
-		return nil, nil
+		return nil, util.ErrUpdatedStatusNotFound
 	}
 
 	k.config["auto.offset.reset"] = "latest"
@@ -126,8 +126,11 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.St
 		return nil, err
 	}
 
-	kafkaMsg, err := consumer.ReadMessage(time.Duration(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 2)) * time.Second)
+	kafkaMsg, err := consumer.ReadMessage(time.Duration(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 10)) * time.Millisecond)
 	if err != nil {
+		if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+			return nil, util.ErrUpdatedStatusNotFound
+		}
 		return nil, err
 	}
 

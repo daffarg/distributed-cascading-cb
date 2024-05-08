@@ -1,5 +1,30 @@
 alternativeEndpoints:
-    - endpoint: "localhost:8081/hello"
-      method: "GET"
-      alternativeEndpoint: "localhost:8082/hello"
-      alternativeMethod: "GET"
+  - endpoint: "http://localhost:8081/hello"
+    method: "GET"
+    alternatives:
+      - endpoint: "http://localhost:8082/hello"
+        method: "GET"
+      - endpoint: "http://localhost:8083/hello"
+        method: "GET"
+  - endpoint: "http://localhost:8084/hello"
+    method: "GET"
+    alternatives:
+      - endpoint: "http://localhost:8085/hello"
+        method: "GET"
+      - endpoint: "http://localhost:8086/hello"
+        method: "GET"
+requiringEndpoints:
+  - endpoint: "http://localhost:8081/hello"
+    method: "GET"
+    requirings:
+      - endpoint: "http://localhost:8082/hello"
+        method: "GET"
+      - endpoint: "http://localhost:8083/hello"
+        method: "GET"
+  - endpoint: "http://localhost:8084/hello"
+    method: "GET"
+    requirings:
+      - endpoint: "http://localhost:8085/hello"
+        method: "GET"
+      - endpoint: "http://localhost:8086/hello"
+        method: "GET"

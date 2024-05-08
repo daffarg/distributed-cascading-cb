@@ -8,6 +8,7 @@ import (
 	"github.com/daffarg/distributed-cascading-cb/repository"
 	"github.com/daffarg/distributed-cascading-cb/util"
 	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/go-playground/validator/v10"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
@@ -22,14 +23,15 @@ type CircuitBreakerService interface {
 }
 
 type service struct {
-	log        log.Logger
-	validator  *validator.Validate
-	repository repository.Repository
-	broker     broker.MessageBroker
-	breakers   map[string]*circuitbreaker.CircuitBreaker
-	httpClient *http.Client
-	tracer     trace.Tracer
-	config     *config.Config
+	log          log.Logger
+	validator    *validator.Validate
+	repository   repository.Repository
+	broker       broker.MessageBroker
+	breakers     map[string]*circuitbreaker.CircuitBreaker
+	httpClient   *http.Client
+	tracer       trace.Tracer
+	config       *config.Config
+	subscribeMap map[string]bool
 }
 
 func NewCircuitBreakerService(
@@ -41,12 +43,7 @@ func NewCircuitBreakerService(
 	tracer trace.Tracer,
 	config *config.Config,
 ) CircuitBreakerService {
-	for _, ep := range config.AlternativeEndpoints {
-		encodedTopic := util.EncodeTopic(ep.AlternativeEndpoint)
-		go broker.SubscribeAsync(context.Background(), encodedTopic, repository.SetWithExp)
-	}
-
-	return &service{
+	svc := &service{
 		log:        log,
 		validator:  validator,
 		repository: repository,
@@ -56,4 +53,15 @@ func NewCircuitBreakerService(
 		tracer:     tracer,
 		config:     config,
 	}
+
+	svc.initConfig(context.Background())
+	err := svc.initSubscribe(context.Background())
+	if err != nil {
+		level.Error(svc.log).Log(
+			util.LogMessage, "failed to init subscribe",
+			util.LogError, err,
+		)
+	}
+
+	return svc
 }

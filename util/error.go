@@ -8,5 +8,5 @@ var (
 	ErrCircuitBreakerOpen       = errors.New("circuit breaker is open")
 	ErrFailedExecuteRequest     = errors.New("failed to execute the request")
 	ErrFailedExecuteAltEndpoint = errors.New("failed to execute the request to the alternative endpoint")
-	ErrFailedSubscribe          = errors.New("failed first time subscribing to the broker to get new status")
+	ErrUpdatedStatusNotFound    = errors.New("circuit breaker updated status not found")
 )
