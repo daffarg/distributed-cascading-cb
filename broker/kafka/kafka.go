@@ -120,6 +120,19 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.St
 	k.config["allow.auto.create.topics"] = "true"
 
 	consumer, _ := kafka.NewConsumer(&k.config)
+	_, high, err := consumer.GetWatermarkOffsets(topic, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	offset, err := kafka.NewOffset(high - 1)
+	if err != nil {
+		return nil, err
+	}
+	err = consumer.Assign([]kafka.TopicPartition{{Topic: &topic, Partition: 0, Offset: offset}})
+	if err != nil {
+		return nil, err
+	}
 
 	err = consumer.SubscribeTopics([]string{topic}, nil)
 	if err != nil {
@@ -246,15 +259,18 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 				continue
 			}
 
-			err = handler(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, time.Duration(msg.Timeout)*time.Second)
-			if err != nil {
-				level.Error(k.log).Log(
-					util.LogMessage, "failed to store circuit breaker status into db",
-					util.LogError, err,
-					util.LogTopic, topic,
-					util.LogStatus, msg,
-				)
-				continue
+			timestamp, _ := time.Parse(time.RFC3339, msg.Timestamp)
+			if timestamp.Add(time.Duration(msg.Timeout) * time.Second).Before(time.Now()) {
+				err = handler(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, time.Duration(msg.Timeout)*time.Second)
+				if err != nil {
+					level.Error(k.log).Log(
+						util.LogMessage, "failed to store circuit breaker status into db",
+						util.LogError, err,
+						util.LogTopic, topic,
+						util.LogStatus, msg,
+					)
+					continue
+				}
 			}
 
 			_, err = consumer.CommitMessage(kafkaMsg)

@@ -59,7 +59,8 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 				)
 			}
 		} else {
-			if msg.Status == circuitbreaker.StateOpen.String() {
+			timestamp, _ := time.Parse(time.RFC3339, msg.Timestamp)
+			if timestamp.Add(time.Duration(msg.Timeout) * time.Second).Before(time.Now()) {
 				go func() {
 					err = s.repository.SetWithExp(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, time.Duration(msg.Timeout)*time.Second)
 					if err != nil {
@@ -73,7 +74,9 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 					}
 				}()
 
-				return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
+				if msg.Status == circuitbreaker.StateOpen.String() {
+					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
+				}
 			}
 		}
 	}
