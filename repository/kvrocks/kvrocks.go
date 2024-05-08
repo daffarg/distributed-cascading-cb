@@ -86,3 +86,30 @@ func (k *kvRocks) GetMemberOfSet(ctx context.Context, key string) ([]string, err
 
 	return members, err
 }
+
+func (k *kvRocks) IsKeyExist(ctx context.Context, key string) (bool, error) {
+	isExist, err := k.client.Exists(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+
+	return isExist == 1, err
+}
+
+func (k *kvRocks) Scan(ctx context.Context, pattern string, count int64) ([]string, error) {
+	var cursor uint64
+	keys := make([]string, 0)
+	for {
+		var err error
+		tmpKeys, cursor, err := k.client.Scan(ctx, cursor, pattern, count).Result()
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, tmpKeys...)
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return keys, nil
+}

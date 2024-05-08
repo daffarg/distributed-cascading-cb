@@ -15,10 +15,14 @@ const (
 	LogStatus                  = "status"
 	LogResult                  = "result"
 	LogMetadata                = "metadata"
+	LogEndpoint                = "endpoint"
+	LogConfig                  = "config"
+	LogKey                     = "key"
 )
 
 const (
-	RequiredEndpointsKey = "required_endpoints"
+	RequiringsEndpointKeyPrefix = "requirings:"
+	StatusKeyPrefix             = "status:"
 )
 
 const (

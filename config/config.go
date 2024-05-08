@@ -8,23 +8,36 @@ import (
 )
 
 type Config struct {
-	AlternativeEndpoints map[string]AlternativeEndpoint `yaml:"alternativeEndpoints"`
+	AlternativeEndpoints map[string]AlternativeEndpoint `yaml:"alternativeEndpoints" json:"alternative_endpoints"`
+	RequiringEndpoints   map[string]RequiringEndpoint   `yaml:"requiringEndpoints" json:"requiring_endpoints"`
 }
 
 type config struct {
-	AlternativeEndpoints []AlternativeEndpoint `yaml:"alternativeEndpoints"`
+	AlternativeEndpoints []AlternativeEndpoint `yaml:"alternativeEndpoints" json:"alternative_endpoints"`
+	RequiringEndpoints   []RequiringEndpoint   `yaml:"requiringEndpoints" json:"requiring_endpoints"`
 }
 
 type AlternativeEndpoint struct {
-	Endpoint            string `yaml:"endpoint"`
-	Method              string `yaml:"method"`
-	AlternativeEndpoint string `yaml:"alternativeEndpoint"`
-	AlternativeMethod   string `yaml:"alternativeMethod"`
+	Endpoint     string     `yaml:"endpoint" json:"endpoint"`
+	Method       string     `yaml:"method" json:"method"`
+	Alternatives []Endpoint `yaml:"alternatives" json:"alternatives"`
+}
+
+type RequiringEndpoint struct {
+	Endpoint   string     `yaml:"endpoint" json:"endpoint"`
+	Method     string     `yaml:"method" json:"method"`
+	Requirings []Endpoint `yaml:"requirings" json:"requirings"`
+}
+
+type Endpoint struct {
+	Endpoint string `yaml:"endpoint" json:"endpoint"`
+	Method   string `yaml:"method" json:"method"`
 }
 
 func NewConfig() *Config {
 	return &Config{
 		AlternativeEndpoints: make(map[string]AlternativeEndpoint),
+		RequiringEndpoints:   make(map[string]RequiringEndpoint),
 	}
 }
 
@@ -43,21 +56,46 @@ func (c *Config) Read(configPath string) error {
 		return err
 	}
 
-	for _, ep := range tmpConfig.AlternativeEndpoints {
-		parsedUrl, err := util.GetGeneralURLFormat(ep.Endpoint)
+	for i := range tmpConfig.AlternativeEndpoints {
+		tmpConfig.AlternativeEndpoints[i].Method = strings.ToUpper(tmpConfig.AlternativeEndpoints[i].Method)
+		parsedUrl, err := util.GetGeneralURLFormat(strings.ToLower(tmpConfig.AlternativeEndpoints[i].Endpoint))
 		if err != nil {
 			return err
 		}
-		ep.Method = strings.ToUpper(ep.Method)
-		ep.Endpoint = util.FormEndpointName(strings.ToLower(parsedUrl), ep.Method)
+		tmpConfig.AlternativeEndpoints[i].Endpoint = parsedUrl
+		key := util.FormEndpointName(parsedUrl, tmpConfig.AlternativeEndpoints[i].Method)
 
-		parsedUrl, err = util.GetGeneralURLFormat(ep.AlternativeEndpoint)
+		for j := range tmpConfig.AlternativeEndpoints[i].Alternatives {
+			tmpConfig.AlternativeEndpoints[i].Alternatives[j].Method = strings.ToUpper(tmpConfig.AlternativeEndpoints[i].Alternatives[j].Method)
+			parsedUrl, err = util.GetGeneralURLFormat(strings.ToLower(tmpConfig.AlternativeEndpoints[i].Alternatives[j].Endpoint))
+			if err != nil {
+				return err
+			}
+			tmpConfig.AlternativeEndpoints[i].Alternatives[j].Endpoint = parsedUrl
+		}
+
+		c.AlternativeEndpoints[key] = tmpConfig.AlternativeEndpoints[i]
+	}
+
+	for i := range tmpConfig.RequiringEndpoints {
+		tmpConfig.RequiringEndpoints[i].Method = strings.ToUpper(tmpConfig.RequiringEndpoints[i].Method)
+		parsedUrl, err := util.GetGeneralURLFormat(strings.ToLower(tmpConfig.RequiringEndpoints[i].Endpoint))
 		if err != nil {
 			return err
 		}
-		ep.AlternativeMethod = strings.ToUpper(ep.AlternativeMethod)
+		tmpConfig.RequiringEndpoints[i].Endpoint = parsedUrl
+		key := util.FormEndpointName(parsedUrl, tmpConfig.RequiringEndpoints[i].Method)
 
-		c.AlternativeEndpoints[ep.Endpoint] = ep
+		for j := range tmpConfig.RequiringEndpoints[i].Requirings {
+			tmpConfig.RequiringEndpoints[i].Requirings[j].Method = strings.ToUpper(tmpConfig.RequiringEndpoints[i].Requirings[j].Method)
+			parsedUrl, err = util.GetGeneralURLFormat(strings.ToLower(tmpConfig.RequiringEndpoints[i].Requirings[j].Endpoint))
+			if err != nil {
+				return err
+			}
+			tmpConfig.RequiringEndpoints[i].Requirings[j].Endpoint = parsedUrl
+		}
+
+		c.RequiringEndpoints[key] = tmpConfig.RequiringEndpoints[i]
 	}
 
 	return err

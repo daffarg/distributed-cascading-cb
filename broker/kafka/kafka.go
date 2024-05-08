@@ -99,6 +99,55 @@ func (k *kafkaBroker) Publish(ctx context.Context, topic string, message *protob
 	return nil
 }
 
+func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.Status, error) {
+	adminClient, err := kafka.NewAdminClient(&k.config)
+	if err != nil {
+		return nil, err
+	}
+	defer adminClient.Close()
+
+	metadata, err := adminClient.GetMetadata(&topic, false, util.GetIntEnv("KAFKA_GET_METADATA_TIMEOUT", 30000))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(metadata.Topics[topic].Partitions) <= 0 {
+		return nil, util.ErrUpdatedStatusNotFound
+	}
+
+	k.config["auto.offset.reset"] = "latest"
+	k.config["enable.auto.commit"] = "false"
+	k.config["allow.auto.create.topics"] = "true"
+
+	consumer, _ := kafka.NewConsumer(&k.config)
+
+	err = consumer.SubscribeTopics([]string{topic}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	kafkaMsg, err := consumer.ReadMessage(time.Duration(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 10)) * time.Millisecond)
+	if err != nil {
+		if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+			return nil, util.ErrUpdatedStatusNotFound
+		}
+		return nil, err
+	}
+
+	msg := &protobuf.Status{}
+	err = proto.Unmarshal(kafkaMsg.Value, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = consumer.CommitMessage(kafkaMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	return msg, nil
+}
+
 func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler func(ctx context.Context, key, value string, exp time.Duration) error) {
 	adminClient, err := kafka.NewAdminClient(&k.config)
 	if err != nil {
@@ -203,6 +252,7 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 					util.LogMessage, "failed to store circuit breaker status into db",
 					util.LogError, err,
 					util.LogTopic, topic,
+					util.LogStatus, msg,
 				)
 				continue
 			}

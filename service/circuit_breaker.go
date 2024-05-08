@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"github.com/btcsuite/btcd/btcutil/base58"
 	"github.com/daffarg/distributed-cascading-cb/protobuf"
 	"time"
 
@@ -45,7 +44,7 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 					go func() {
 						for _, ep := range requiringEndpoints {
 							go func() {
-								encodedTopic := base58.Encode([]byte(ep))
+								encodedTopic := util.EncodeTopic(ep)
 								message := &protobuf.Status{
 									Endpoint: ep,
 									Status:   to.String(),
@@ -76,16 +75,14 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 								}
 							}()
 
-							if ep != name {
-								err = s.repository.SetWithExp(context.Background(), util.FormEndpointStatusKey(ep), to.String(), timeout)
-								if err != nil {
-									level.Error(s.log).Log(
-										util.LogMessage, "failed to set circuit breaker status to db",
-										util.LogError, err,
-										util.LogCircuitBreakerEndpoint, name,
-										util.LogCircuitBreakerNewStatus, to.String(),
-									)
-								}
+							err = s.repository.SetWithExp(context.Background(), util.FormEndpointStatusKey(ep), to.String(), timeout)
+							if err != nil {
+								level.Error(s.log).Log(
+									util.LogMessage, "failed to set circuit breaker status to db",
+									util.LogError, err,
+									util.LogCircuitBreakerEndpoint, name,
+									util.LogCircuitBreakerNewStatus, to.String(),
+								)
 							}
 						}
 					}()
