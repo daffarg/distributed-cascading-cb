@@ -121,7 +121,11 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.St
 		return nil, util.ErrUpdatedStatusNotFound
 	}
 
-	consumerConfig := k.config
+	consumerConfig := make(kafka.ConfigMap)
+	for k, v := range k.config {
+		consumerConfig[k] = v
+	}
+
 	consumerConfig["default.topic.config"] = kafka.ConfigMap{"auto.offset.reset": "earliest"}
 	consumerConfig["enable.auto.commit"] = false
 	consumerConfig["go.application.rebalance.enable"] = true
@@ -137,7 +141,7 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.St
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 100))*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(util.GetIntEnv("GET_STATUS_FIRST_TIME_TIMEOUT", 100))*time.Millisecond)
 	defer cancel()
 
 	for {
@@ -149,7 +153,7 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.St
 			)
 			return nil, util.ErrUpdatedStatusNotFound
 		default:
-			ev := consumer.Poll(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 100))
+			ev := consumer.Poll(util.GetIntEnv("FIRST_POLL_TIMEOUT", 100))
 			if ev == nil {
 				continue
 			}
