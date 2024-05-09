@@ -99,7 +99,7 @@ func (k *kafkaBroker) Publish(ctx context.Context, topic string, message *protob
 	return nil
 }
 
-func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Status, error) {
+func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.Status, error) {
 	adminClient, err := kafka.NewAdminClient(&k.config)
 	if err != nil {
 		return nil, err
@@ -110,6 +110,12 @@ func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Stat
 	if err != nil {
 		return nil, err
 	}
+
+	level.Info(k.log).Log(
+		util.LogMessage, "metadata of kafka topic",
+		util.LogTopic, topic,
+		util.LogMetadata, metadata,
+	)
 
 	if len(metadata.Topics[topic].Partitions) <= 0 {
 		return nil, util.ErrUpdatedStatusNotFound
@@ -131,7 +137,7 @@ func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Stat
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 100))*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 100))*time.Millisecond)
 	defer cancel()
 
 	for {
@@ -150,6 +156,11 @@ func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Stat
 
 			switch e := ev.(type) {
 			case kafka.AssignedPartitions:
+				level.Info(k.log).Log(
+					util.LogMessage, "assigning kafka partitions",
+					util.LogTopic, topic,
+				)
+
 				parts := make([]kafka.TopicPartition, len(e.Partitions))
 				for i, tp := range e.Partitions {
 					tp.Offset = kafka.OffsetTail(1)
@@ -185,6 +196,12 @@ func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Stat
 						util.LogTopic, topic,
 						util.LogStatus, msg,
 					)
+				} else {
+					level.Info(k.log).Log(
+						util.LogMessage, "received and committed a kafka message",
+						util.LogTopic, topic,
+						util.LogStatus, msg,
+					)
 				}
 
 				return msg, nil
@@ -202,7 +219,11 @@ func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Stat
 				)
 				return nil, err
 			default:
-
+				level.Info(k.log).Log(
+					util.LogMessage, "default case when polling a message from kafka",
+					util.LogTopic, topic,
+					util.LogEvent, e,
+				)
 			}
 		}
 	}

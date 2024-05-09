@@ -47,6 +47,12 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 	}
 
 	if !isAlreadySubscribed {
+		level.Info(s.log).Log(
+			util.LogMessage, "not subscribe to a topic yet, will be subscribing to topic",
+			util.LogRequest, req,
+			util.LogEndpoint, circuitBreakerName,
+		)
+
 		topic := util.EncodeTopic(circuitBreakerName)
 		msg, err := s.broker.Subscribe(ctx, topic)
 		if err != nil {
@@ -56,6 +62,14 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 					util.LogError, err,
 					util.LogRequest, req,
 					util.LogTopic, topic,
+					util.LogEndpoint, circuitBreakerName,
+				)
+			} else {
+				level.Info(s.log).Log(
+					util.LogMessage, "new circuit breaker status not found yet",
+					util.LogRequest, req,
+					util.LogTopic, topic,
+					util.LogEndpoint, circuitBreakerName,
 				)
 			}
 		} else {
