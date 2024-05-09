@@ -99,7 +99,7 @@ func (k *kafkaBroker) Publish(ctx context.Context, topic string, message *protob
 	return nil
 }
 
-func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.Status, error) {
+func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Status, error) {
 	adminClient, err := kafka.NewAdminClient(&k.config)
 	if err != nil {
 		return nil, err
@@ -115,50 +115,93 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.St
 		return nil, util.ErrUpdatedStatusNotFound
 	}
 
-	k.config["auto.offset.reset"] = "latest"
-	k.config["enable.auto.commit"] = "false"
-	k.config["allow.auto.create.topics"] = "true"
+	consumerConfig := k.config
+	consumerConfig["default.topic.config"] = kafka.ConfigMap{"auto.offset.reset": "earliest"}
+	consumerConfig["enable.auto.commit"] = "false"
+	consumerConfig["allow.auto.create.topics"] = "true"
 
-	consumer, _ := kafka.NewConsumer(&k.config)
-	_, high, err := consumer.GetWatermarkOffsets(topic, 0)
+	consumer, err := kafka.NewConsumer(&consumerConfig)
 	if err != nil {
 		return nil, err
 	}
-
-	offset, err := kafka.NewOffset(high - 1)
-	if err != nil {
-		return nil, err
-	}
-	err = consumer.Assign([]kafka.TopicPartition{{Topic: &topic, Partition: 0, Offset: offset}})
-	if err != nil {
-		return nil, err
-	}
+	defer consumer.Close()
 
 	err = consumer.SubscribeTopics([]string{topic}, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	kafkaMsg, err := consumer.ReadMessage(time.Duration(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 10)) * time.Millisecond)
-	if err != nil {
-		if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 100))*time.Millisecond)
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
 			return nil, util.ErrUpdatedStatusNotFound
+		default:
+			ev := consumer.Poll(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 100))
+			if ev == nil {
+				continue
+			}
+
+			switch e := ev.(type) {
+			case kafka.AssignedPartitions:
+				parts := make([]kafka.TopicPartition, len(e.Partitions))
+				for i, tp := range e.Partitions {
+					tp.Offset = kafka.OffsetTail(1)
+					parts[i] = tp
+				}
+
+				err := consumer.Assign(parts)
+				if err != nil {
+					level.Error(k.log).Log(
+						util.LogMessage, "failed to assign partitions",
+						util.LogError, err,
+						util.LogTopic, topic,
+					)
+				}
+			case *kafka.Message:
+				msg := &protobuf.Status{}
+				err = proto.Unmarshal(e.Value, msg)
+				if err != nil {
+					return nil, err
+				}
+
+				level.Info(k.log).Log(
+					util.LogMessage, "received a new cb status from kafka",
+					util.LogTopic, topic,
+					util.LogStatus, msg,
+				)
+
+				_, err = consumer.CommitMessage(e)
+				if err != nil {
+					level.Error(k.log).Log(
+						util.LogMessage, "failed to commit a status message to kafka",
+						util.LogError, err,
+						util.LogTopic, topic,
+						util.LogStatus, msg,
+					)
+				}
+
+				return msg, nil
+			case kafka.PartitionEOF:
+				level.Info(k.log).Log(
+					util.LogMessage, "reached the end of a partition",
+					util.LogTopic, topic,
+					util.LogEvent, e,
+				)
+			case kafka.Error:
+				level.Error(k.log).Log(
+					util.LogMessage, "error when polling a message from kafka",
+					util.LogError, err,
+					util.LogTopic, topic,
+				)
+				return nil, err
+			default:
+
+			}
 		}
-		return nil, err
 	}
-
-	msg := &protobuf.Status{}
-	err = proto.Unmarshal(kafkaMsg.Value, msg)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = consumer.CommitMessage(kafkaMsg)
-	if err != nil {
-		return nil, err
-	}
-
-	return msg, nil
 }
 
 func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler func(ctx context.Context, key, value string, exp time.Duration) error) {
