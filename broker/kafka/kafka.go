@@ -117,8 +117,8 @@ func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Stat
 
 	consumerConfig := k.config
 	consumerConfig["default.topic.config"] = kafka.ConfigMap{"auto.offset.reset": "earliest"}
-	consumerConfig["enable.auto.commit"] = "false"
-	consumerConfig["allow.auto.create.topics"] = "true"
+	consumerConfig["enable.auto.commit"] = false
+	consumerConfig["go.application.rebalance.enable"] = true
 
 	consumer, err := kafka.NewConsumer(&consumerConfig)
 	if err != nil {
@@ -137,6 +137,10 @@ func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Stat
 	for {
 		select {
 		case <-ctx.Done():
+			level.Info(k.log).Log(
+				util.LogMessage, "timeout when polling a message from kafka",
+				util.LogTopic, topic,
+			)
 			return nil, util.ErrUpdatedStatusNotFound
 		default:
 			ev := consumer.Poll(util.GetIntEnv("FIRST_SUBSCRIBE_TIMEOUT", 100))
