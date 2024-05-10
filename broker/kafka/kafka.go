@@ -99,7 +99,7 @@ func (k *kafkaBroker) Publish(ctx context.Context, topic string, message *protob
 	return nil
 }
 
-func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.Status, error) {
+func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Status, error) {
 	adminClient, err := kafka.NewAdminClient(&k.config)
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topic string) (*protobuf.St
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(util.GetIntEnv("GET_STATUS_FIRST_TIME_TIMEOUT", 100))*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(util.GetIntEnv("GET_STATUS_FIRST_TIME_TIMEOUT", 100))*time.Millisecond)
 	defer cancel()
 
 	for {
