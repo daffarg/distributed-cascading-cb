@@ -90,6 +90,19 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 					}
 				}()
 
+				go s.handleRequiringEndpoint(ctx, &handleRequiringEndpointReq{
+					RequiringEndpoint:  req.RequiringEndpoint,
+					RequiringMethod:    req.RequiringMethod,
+					CircuitBreakerName: circuitBreakerName,
+				})
+
+				go s.handleRequestedEndpoint(ctx, &handleRequestedEndpointReq{
+					RequestedEndpoint:   req.URL,
+					RequestedMethod:     req.Method,
+					CircuitBreakerName:  circuitBreakerName,
+					IsAlreadySubscribed: isAlreadySubscribed,
+				})
+
 				if msg.Status == circuitbreaker.StateOpen.String() {
 					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 				}
