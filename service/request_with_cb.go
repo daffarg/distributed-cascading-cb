@@ -139,6 +139,8 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 					}
 					res.IsFromAlternativeEndpoint = true
 					return res, nil
+				} else {
+					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 				}
 			}
 			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())

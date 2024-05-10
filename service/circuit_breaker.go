@@ -43,11 +43,10 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 
 					go func() {
 						for _, ep := range requiringEndpoints {
-							currentEp := ep
-							go func() {
-								encodedTopic := util.EncodeTopic(currentEp)
+							go func(ep string) {
+								encodedTopic := util.EncodeTopic(ep)
 								message := &protobuf.Status{
-									Endpoint:  currentEp,
+									Endpoint:  ep,
 									Status:    to.String(),
 									Timeout:   uint32(util.GetIntEnv("CB_TIMEOUT", 60)),
 									Timestamp: time.Now().Format(time.RFC3339),
@@ -56,17 +55,7 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 									level.Error(s.log).Log(
 										util.LogMessage, "failed to marshal circuit breaker status",
 										util.LogError, err,
-										util.LogCircuitBreakerEndpoint, currentEp,
-										util.LogCircuitBreakerNewStatus, to.String(),
-									)
-								}
-
-								err = s.repository.SetWithExp(context.Background(), util.FormEndpointStatusKey(ep), to.String(), timeout)
-								if err != nil {
-									level.Error(s.log).Log(
-										util.LogMessage, "failed to set circuit breaker status to db",
-										util.LogError, err,
-										util.LogCircuitBreakerEndpoint, name,
+										util.LogCircuitBreakerEndpoint, ep,
 										util.LogCircuitBreakerNewStatus, to.String(),
 									)
 								}
@@ -76,7 +65,7 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 									level.Error(s.log).Log(
 										util.LogMessage, "failed to publish circuit breaker status",
 										util.LogError, err,
-										util.LogCircuitBreakerEndpoint, currentEp,
+										util.LogCircuitBreakerEndpoint, ep,
 										util.LogCircuitBreakerNewStatus, to.String(),
 									)
 								} else {
@@ -85,7 +74,17 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 										util.LogStatus, message,
 									)
 								}
-							}()
+							}(ep)
+
+							err = s.repository.SetWithExp(context.Background(), util.FormEndpointStatusKey(ep), to.String(), timeout)
+							if err != nil {
+								level.Error(s.log).Log(
+									util.LogMessage, "failed to set circuit breaker status to db",
+									util.LogError, err,
+									util.LogCircuitBreakerEndpoint, name,
+									util.LogCircuitBreakerNewStatus, to.String(),
+								)
+							}
 						}
 					}()
 				}()
