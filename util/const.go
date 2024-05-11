@@ -18,6 +18,7 @@ const (
 	LogEndpoint                = "endpoint"
 	LogConfig                  = "config"
 	LogKey                     = "key"
+	LogEvent                   = "event"
 )
 
 const (

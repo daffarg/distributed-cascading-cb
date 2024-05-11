@@ -41,9 +41,9 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 						)
 					}
 
-					go func() {
-						for _, ep := range requiringEndpoints {
-							go func() {
+					go func(reqEp []string) {
+						for _, ep := range reqEp {
+							go func(ep string) {
 								encodedTopic := util.EncodeTopic(ep)
 								message := &protobuf.Status{
 									Endpoint:  ep,
@@ -74,9 +74,14 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 										util.LogStatus, message,
 									)
 								}
-							}()
+							}(ep)
 
-							err = s.repository.SetWithExp(context.Background(), util.FormEndpointStatusKey(ep), to.String(), timeout)
+							err = s.repository.SetWithExp(
+								context.Background(),
+								util.FormEndpointStatusKey(ep),
+								to.String(),
+								time.Duration(util.GetIntEnv("CB_TIMEOUT", 60))*time.Second,
+							)
 							if err != nil {
 								level.Error(s.log).Log(
 									util.LogMessage, "failed to set circuit breaker status to db",
@@ -86,7 +91,7 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 								)
 							}
 						}
-					}()
+					}(requiringEndpoints)
 				}()
 			}
 		},

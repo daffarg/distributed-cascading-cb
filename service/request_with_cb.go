@@ -47,6 +47,12 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 	}
 
 	if !isAlreadySubscribed {
+		level.Info(s.log).Log(
+			util.LogMessage, "not subscribe to a topic yet, will be subscribing to topic",
+			util.LogRequest, req,
+			util.LogEndpoint, circuitBreakerName,
+		)
+
 		topic := util.EncodeTopic(circuitBreakerName)
 		msg, err := s.broker.Subscribe(ctx, topic)
 		if err != nil {
@@ -56,6 +62,14 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 					util.LogError, err,
 					util.LogRequest, req,
 					util.LogTopic, topic,
+					util.LogEndpoint, circuitBreakerName,
+				)
+			} else {
+				level.Info(s.log).Log(
+					util.LogMessage, "new circuit breaker status not found yet",
+					util.LogRequest, req,
+					util.LogTopic, topic,
+					util.LogEndpoint, circuitBreakerName,
 				)
 			}
 		} else {
@@ -75,6 +89,19 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 						)
 					}
 				}()
+
+				go s.handleRequiringEndpoint(ctx, &handleRequiringEndpointReq{
+					RequiringEndpoint:  req.RequiringEndpoint,
+					RequiringMethod:    req.RequiringMethod,
+					CircuitBreakerName: circuitBreakerName,
+				})
+
+				go s.handleRequestedEndpoint(ctx, &handleRequestedEndpointReq{
+					RequestedEndpoint:   req.URL,
+					RequestedMethod:     req.Method,
+					CircuitBreakerName:  circuitBreakerName,
+					IsAlreadySubscribed: isAlreadySubscribed,
+				})
 
 				if msg.Status == circuitbreaker.StateOpen.String() {
 					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
@@ -125,6 +152,8 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 					}
 					res.IsFromAlternativeEndpoint = true
 					return res, nil
+				} else {
+					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 				}
 			}
 			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())

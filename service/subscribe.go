@@ -27,7 +27,7 @@ func (s *service) initSubscribe(ctx context.Context) error {
 			if ep != endpoint {
 				s.subscribeMap[ep] = true
 				encodedTopic := util.EncodeTopic(ep)
-				go s.broker.SubscribeAsync(ctx, encodedTopic, s.repository.SetWithExp)
+				go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
 			}
 		}
 	}

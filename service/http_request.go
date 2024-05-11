@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"github.com/daffarg/distributed-cascading-cb/util"
 	"io"
 	"net/http"
 )
@@ -23,6 +24,10 @@ func (s *service) httpRequest(ctx context.Context, method, url string, body []by
 	httpRes, err := client.Do(req)
 	if err != nil {
 		return nil, err
+	}
+
+	if httpRes.StatusCode >= 500 {
+		return nil, util.ErrFailedExecuteRequest
 	}
 	defer httpRes.Body.Close()
 
