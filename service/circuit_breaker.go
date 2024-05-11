@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"github.com/daffarg/distributed-cascading-cb/protobuf"
 	"time"
 
@@ -24,75 +25,97 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 		Timeout: timeout,
 		OnStateChange: func(name string, from circuitbreaker.State, to circuitbreaker.State) {
 			if to == circuitbreaker.StateOpen {
-				go func() {
-					level.Info(s.log).Log(
-						util.LogCircuitBreakerEndpoint, name,
-						util.LogCircuitBreakerOldStatus, from,
-						util.LogCircuitBreakerNewStatus, to,
-					)
-
-					requiringEndpoints, err := s.repository.GetMemberOfSet(context.Background(), util.FormRequiringEndpointsKey(name))
-					if err != nil {
-						level.Error(s.log).Log(
-							util.LogMessage, "failed to get requiring endpoints from db",
-							util.LogError, err,
-							util.LogCircuitBreakerEndpoint, name,
-							util.LogCircuitBreakerNewStatus, to.String(),
-						)
-					}
-
-					go func(reqEp []string) {
-						for _, ep := range reqEp {
-							go func(ep string) {
-								encodedTopic := util.EncodeTopic(ep)
-								message := &protobuf.Status{
-									Endpoint:  ep,
-									Status:    to.String(),
-									Timeout:   uint32(util.GetIntEnv("CB_TIMEOUT", 60)),
-									Timestamp: time.Now().Format(time.RFC3339),
-								}
-								if err != nil {
-									level.Error(s.log).Log(
-										util.LogMessage, "failed to marshal circuit breaker status",
-										util.LogError, err,
-										util.LogCircuitBreakerEndpoint, ep,
-										util.LogCircuitBreakerNewStatus, to.String(),
-									)
-								}
-
-								err = s.broker.Publish(context.Background(), encodedTopic, message)
-								if err != nil {
-									level.Error(s.log).Log(
-										util.LogMessage, "failed to publish circuit breaker status",
-										util.LogError, err,
-										util.LogCircuitBreakerEndpoint, ep,
-										util.LogCircuitBreakerNewStatus, to.String(),
-									)
-								} else {
-									level.Info(s.log).Log(
-										util.LogMessage, "published circuit breaker status",
-										util.LogStatus, message,
-									)
-								}
-							}(ep)
-
-							err = s.repository.SetWithExp(
-								context.Background(),
-								util.FormEndpointStatusKey(ep),
-								to.String(),
-								time.Duration(util.GetIntEnv("CB_TIMEOUT", 60))*time.Second,
-							)
-							if err != nil {
+				isThereAlt := false
+				if alt, ok := s.config.AlternativeEndpoints[name]; ok {
+					for _, ep := range alt.Alternatives {
+						endpointName := util.FormEndpointName(ep.Endpoint, ep.Method)
+						_, err := s.repository.Get(context.Background(), util.FormEndpointStatusKey(endpointName))
+						if err != nil {
+							if errors.Is(err, util.ErrKeyNotFound) {
+								isThereAlt = true
+								break
+							} else {
 								level.Error(s.log).Log(
-									util.LogMessage, "failed to set circuit breaker status to db",
+									util.LogMessage, "failed to get endpoint status from db",
+									util.LogEndpoint, endpointName,
 									util.LogError, err,
-									util.LogCircuitBreakerEndpoint, name,
-									util.LogCircuitBreakerNewStatus, to.String(),
 								)
 							}
 						}
-					}(requiringEndpoints)
-				}()
+					}
+				}
+
+				if !isThereAlt {
+					go func() {
+						level.Info(s.log).Log(
+							util.LogCircuitBreakerEndpoint, name,
+							util.LogCircuitBreakerOldStatus, from,
+							util.LogCircuitBreakerNewStatus, to,
+						)
+
+						requiringEndpoints, err := s.repository.GetMemberOfSet(context.Background(), util.FormRequiringEndpointsKey(name))
+						if err != nil {
+							level.Error(s.log).Log(
+								util.LogMessage, "failed to get requiring endpoints from db",
+								util.LogError, err,
+								util.LogCircuitBreakerEndpoint, name,
+								util.LogCircuitBreakerNewStatus, to.String(),
+							)
+						}
+
+						go func(reqEp []string) {
+							for _, ep := range reqEp {
+								go func(ep string) {
+									encodedTopic := util.EncodeTopic(ep)
+									message := &protobuf.Status{
+										Endpoint:  ep,
+										Status:    to.String(),
+										Timeout:   uint32(util.GetIntEnv("CB_TIMEOUT", 60)),
+										Timestamp: time.Now().Format(time.RFC3339),
+									}
+									if err != nil {
+										level.Error(s.log).Log(
+											util.LogMessage, "failed to marshal circuit breaker status",
+											util.LogError, err,
+											util.LogCircuitBreakerEndpoint, ep,
+											util.LogCircuitBreakerNewStatus, to.String(),
+										)
+									}
+
+									err = s.broker.Publish(context.Background(), encodedTopic, message)
+									if err != nil {
+										level.Error(s.log).Log(
+											util.LogMessage, "failed to publish circuit breaker status",
+											util.LogError, err,
+											util.LogCircuitBreakerEndpoint, ep,
+											util.LogCircuitBreakerNewStatus, to.String(),
+										)
+									} else {
+										level.Info(s.log).Log(
+											util.LogMessage, "published circuit breaker status",
+											util.LogStatus, message,
+										)
+									}
+								}(ep)
+
+								err = s.repository.SetWithExp(
+									context.Background(),
+									util.FormEndpointStatusKey(ep),
+									to.String(),
+									time.Duration(util.GetIntEnv("CB_TIMEOUT", 60))*time.Second,
+								)
+								if err != nil {
+									level.Error(s.log).Log(
+										util.LogMessage, "failed to set circuit breaker status to db",
+										util.LogError, err,
+										util.LogCircuitBreakerEndpoint, name,
+										util.LogCircuitBreakerNewStatus, to.String(),
+									)
+								}
+							}
+						}(requiringEndpoints)
+					}()
+				}
 			}
 		},
 	}
