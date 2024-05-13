@@ -115,6 +115,21 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 							}
 						}(requiringEndpoints)
 					}()
+				} else { // if there is still alternative endpoint, only set cb status locally and not publish the status
+					err := s.repository.SetWithExp(
+						context.Background(),
+						util.FormEndpointStatusKey(name),
+						to.String(),
+						time.Duration(util.GetIntEnv("CB_TIMEOUT", 60))*time.Second,
+					)
+					if err != nil {
+						level.Error(s.log).Log(
+							util.LogMessage, "failed to set circuit breaker status to db",
+							util.LogError, err,
+							util.LogCircuitBreakerEndpoint, name,
+							util.LogCircuitBreakerNewStatus, to.String(),
+						)
+					}
 				}
 			}
 		},

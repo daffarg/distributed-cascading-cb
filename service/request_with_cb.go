@@ -46,6 +46,8 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 		isAlreadySubscribed = true
 	}
 
+	altEndpoint, hasAltEp := s.config.AlternativeEndpoints[circuitBreakerName]
+
 	if !isAlreadySubscribed {
 		level.Info(s.log).Log(
 			util.LogMessage, "not subscribe to a topic yet, will be subscribing to topic",
@@ -104,7 +106,20 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 				})
 
 				if msg.Status == circuitbreaker.StateOpen.String() {
-					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
+					if hasAltEp {
+						res, err := s.executeAlternativeEndpoint(ctx, &executeAlternativeEndpointReq{
+							AlternativeEndpoint: altEndpoint,
+							Body:                req.Body,
+							Header:              req.Header,
+						})
+						if err != nil {
+							return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteAltEndpoint.Error())
+						}
+						res.IsFromAlternativeEndpoint = true
+						return res, nil
+					} else {
+						return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
+					}
 				}
 			}
 		}
@@ -122,8 +137,6 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 		CircuitBreakerName:  circuitBreakerName,
 		IsAlreadySubscribed: isAlreadySubscribed,
 	})
-
-	altEndpoint, hasAltEp := s.config.AlternativeEndpoints[circuitBreakerName]
 
 	_, err = s.repository.Get(ctx, endpointStatusKey)
 	if err != nil {

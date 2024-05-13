@@ -9,24 +9,16 @@ import (
 
 type Config struct {
 	AlternativeEndpoints map[string]AlternativeEndpoint `yaml:"alternativeEndpoints" json:"alternative_endpoints"`
-	RequiringEndpoints   map[string]RequiringEndpoint   `yaml:"requiringEndpoints" json:"requiring_endpoints"`
 }
 
 type config struct {
 	AlternativeEndpoints []AlternativeEndpoint `yaml:"alternativeEndpoints" json:"alternative_endpoints"`
-	RequiringEndpoints   []RequiringEndpoint   `yaml:"requiringEndpoints" json:"requiring_endpoints"`
 }
 
 type AlternativeEndpoint struct {
 	Endpoint     string     `yaml:"endpoint" json:"endpoint"`
 	Method       string     `yaml:"method" json:"method"`
 	Alternatives []Endpoint `yaml:"alternatives" json:"alternatives"`
-}
-
-type RequiringEndpoint struct {
-	Endpoint   string     `yaml:"endpoint" json:"endpoint"`
-	Method     string     `yaml:"method" json:"method"`
-	Requirings []Endpoint `yaml:"requirings" json:"requirings"`
 }
 
 type Endpoint struct {
@@ -37,7 +29,6 @@ type Endpoint struct {
 func NewConfig() *Config {
 	return &Config{
 		AlternativeEndpoints: make(map[string]AlternativeEndpoint),
-		RequiringEndpoints:   make(map[string]RequiringEndpoint),
 	}
 }
 
@@ -75,27 +66,6 @@ func (c *Config) Read(configPath string) error {
 		}
 
 		c.AlternativeEndpoints[key] = tmpConfig.AlternativeEndpoints[i]
-	}
-
-	for i := range tmpConfig.RequiringEndpoints {
-		tmpConfig.RequiringEndpoints[i].Method = strings.ToUpper(tmpConfig.RequiringEndpoints[i].Method)
-		parsedUrl, err := util.GetGeneralURLFormat(strings.ToLower(tmpConfig.RequiringEndpoints[i].Endpoint))
-		if err != nil {
-			return err
-		}
-		tmpConfig.RequiringEndpoints[i].Endpoint = parsedUrl
-		key := util.FormEndpointName(parsedUrl, tmpConfig.RequiringEndpoints[i].Method)
-
-		for j := range tmpConfig.RequiringEndpoints[i].Requirings {
-			tmpConfig.RequiringEndpoints[i].Requirings[j].Method = strings.ToUpper(tmpConfig.RequiringEndpoints[i].Requirings[j].Method)
-			parsedUrl, err = util.GetGeneralURLFormat(strings.ToLower(tmpConfig.RequiringEndpoints[i].Requirings[j].Endpoint))
-			if err != nil {
-				return err
-			}
-			tmpConfig.RequiringEndpoints[i].Requirings[j].Endpoint = parsedUrl
-		}
-
-		c.RequiringEndpoints[key] = tmpConfig.RequiringEndpoints[i]
 	}
 
 	return err
