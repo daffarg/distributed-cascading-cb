@@ -14,7 +14,8 @@ func (s *service) initConfig(ctx context.Context) {
 
 	for _, ep := range s.config.AlternativeEndpoints {
 		for _, alt := range ep.Alternatives {
-			endpointName := util.FormEndpointName(alt.Endpoint, alt.Method)
+			parsedUrl, _ := util.GetGeneralURLFormat(alt.Endpoint)
+			endpointName := util.FormEndpointName(parsedUrl, alt.Method)
 			_, err := s.repository.AddMembersIntoSet(
 				ctx,
 				util.FormRequiringEndpointsKey(endpointName),
