@@ -25,6 +25,7 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 		Timeout: timeout,
 		OnStateChange: func(name string, from circuitbreaker.State, to circuitbreaker.State) {
 			level.Info(s.log).Log(
+				util.LogMessage, "circuit breaker state change",
 				util.LogCircuitBreakerEndpoint, name,
 				util.LogCircuitBreakerOldStatus, from,
 				util.LogCircuitBreakerNewStatus, to,
@@ -126,9 +127,9 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 							}
 						}
 					}()
-				} else { // if there is still alternative endpoint, only set cb status locally and not publish the status
+				} else {
 					level.Info(s.log).Log(
-						util.LogMessage, "there are still alternative endpoints, only set status locally and not publishing it",
+						util.LogMessage, "there are still alternative endpoints, only publishing the endpoint not its requirings",
 						util.LogCircuitBreakerEndpoint, name,
 						util.LogCircuitBreakerOldStatus, from,
 						util.LogCircuitBreakerNewStatus, to,
@@ -146,6 +147,37 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 							util.LogError, err,
 							util.LogCircuitBreakerEndpoint, name,
 							util.LogCircuitBreakerNewStatus, to.String(),
+						)
+					}
+
+					encodedTopic := util.EncodeTopic(name)
+					message := &protobuf.Status{
+						Endpoint:  name,
+						Status:    to.String(),
+						Timeout:   uint32(util.GetIntEnv("CB_TIMEOUT", 60)),
+						Timestamp: time.Now().Format(time.RFC3339),
+					}
+					if err != nil {
+						level.Error(s.log).Log(
+							util.LogMessage, "failed to marshal circuit breaker status",
+							util.LogError, err,
+							util.LogCircuitBreakerEndpoint, name,
+							util.LogCircuitBreakerNewStatus, to.String(),
+						)
+					}
+
+					err = s.broker.Publish(context.Background(), encodedTopic, message)
+					if err != nil {
+						level.Error(s.log).Log(
+							util.LogMessage, "failed to publish circuit breaker status",
+							util.LogError, err,
+							util.LogCircuitBreakerEndpoint, name,
+							util.LogCircuitBreakerNewStatus, to.String(),
+						)
+					} else {
+						level.Info(s.log).Log(
+							util.LogMessage, "published circuit breaker status",
+							util.LogStatus, message,
 						)
 					}
 				}
