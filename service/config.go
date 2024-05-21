@@ -26,6 +26,9 @@ func (s *service) initConfig(ctx context.Context) {
 					util.LogError, err,
 				)
 			}
+			encodedTopic := util.EncodeTopic(endpointName)
+			go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
+			s.subscribeMap[endpointName] = true
 		}
 	}
 }

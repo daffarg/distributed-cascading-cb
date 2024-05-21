@@ -311,6 +311,11 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 	}
 	defer consumer.Close()
 
+	level.Info(k.log).Log(
+		util.LogMessage, "subscribed to a kafka topic",
+		util.LogTopic, topic,
+	)
+
 	for {
 		kafkaMsg, err := consumer.ReadMessage(-1)
 		if err != nil {

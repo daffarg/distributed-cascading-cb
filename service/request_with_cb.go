@@ -46,6 +46,12 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 		isAlreadySubscribed = true
 	}
 
+	isException := false
+	_, ok = s.config.Exceptions[circuitBreakerName]
+	if ok {
+		isException = true
+	}
+
 	altEndpoint, hasAltEp := s.config.AlternativeEndpoints[circuitBreakerName]
 
 	if !isAlreadySubscribed {
@@ -117,6 +123,12 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 					}
 					res.IsFromAlternativeEndpoint = true
 					return res, nil
+				} else if isException {
+					res, err := s.httpRequest(ctx, req.Method, req.URL, req.Body, req.Header)
+					if err != nil {
+						return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
+					}
+					return res, nil
 				} else {
 					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 				}
@@ -164,6 +176,12 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 					}
 					res.IsFromAlternativeEndpoint = true
 					return res, nil
+				} else if isException {
+					res, err := s.httpRequest(ctx, req.Method, req.URL, req.Body, req.Header)
+					if err != nil {
+						return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
+					}
+					return res, nil
 				} else {
 					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 				}
@@ -186,7 +204,12 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 		}
 		res.IsFromAlternativeEndpoint = true
 		return res, nil
+	} else if isException {
+		res, err := s.httpRequest(ctx, req.Method, req.URL, req.Body, req.Header)
+		if err != nil {
+			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
+		}
+		return res, nil
 	}
-
 	return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
 }

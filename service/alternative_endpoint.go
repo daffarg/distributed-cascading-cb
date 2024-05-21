@@ -39,9 +39,9 @@ func (s *service) executeAlternativeEndpoint(ctx context.Context, req *executeAl
 					util.LogError, err,
 					util.LogAlternativeEndpoint, endpoint,
 				)
+			} else {
+				return response.(*Response), nil
 			}
-
-			return response.(*Response), nil
 		}
 	}
 

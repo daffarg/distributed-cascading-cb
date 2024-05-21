@@ -127,6 +127,13 @@ func (s *service) getCircuitBreaker(name string) *circuitbreaker.CircuitBreaker 
 						}
 					}()
 				} else { // if there is still alternative endpoint, only set cb status locally and not publish the status
+					level.Info(s.log).Log(
+						util.LogMessage, "there are still alternative endpoints, only set status locally and not publishing it",
+						util.LogCircuitBreakerEndpoint, name,
+						util.LogCircuitBreakerOldStatus, from,
+						util.LogCircuitBreakerNewStatus, to,
+					)
+
 					err := s.repository.SetWithExp(
 						context.Background(),
 						util.FormEndpointStatusKey(name),

@@ -9,10 +9,12 @@ import (
 
 type Config struct {
 	AlternativeEndpoints map[string]AlternativeEndpoint `yaml:"alternativeEndpoints" json:"alternative_endpoints"`
+	Exceptions           map[string]Endpoint            `yaml:"exceptions" json:"exceptions"`
 }
 
 type config struct {
 	AlternativeEndpoints []AlternativeEndpoint `yaml:"alternativeEndpoints" json:"alternative_endpoints"`
+	Exceptions           []Endpoint            `yaml:"exceptions" json:"exceptions"`
 }
 
 type AlternativeEndpoint struct {
@@ -29,6 +31,7 @@ type Endpoint struct {
 func NewConfig() *Config {
 	return &Config{
 		AlternativeEndpoints: make(map[string]AlternativeEndpoint),
+		Exceptions:           make(map[string]Endpoint),
 	}
 }
 
@@ -53,7 +56,6 @@ func (c *Config) Read(configPath string) error {
 		if err != nil {
 			return err
 		}
-		tmpConfig.AlternativeEndpoints[i].Endpoint = parsedUrl
 		key := util.FormEndpointName(parsedUrl, tmpConfig.AlternativeEndpoints[i].Method)
 
 		for j := range tmpConfig.AlternativeEndpoints[i].Alternatives {
@@ -62,10 +64,20 @@ func (c *Config) Read(configPath string) error {
 			if err != nil {
 				return err
 			}
-			tmpConfig.AlternativeEndpoints[i].Alternatives[j].Endpoint = parsedUrl
 		}
 
 		c.AlternativeEndpoints[key] = tmpConfig.AlternativeEndpoints[i]
+	}
+
+	for i := range tmpConfig.Exceptions {
+		tmpConfig.Exceptions[i].Method = strings.ToUpper(tmpConfig.Exceptions[i].Method)
+		parsedUrl, err := util.GetGeneralURLFormat(strings.ToLower(tmpConfig.Exceptions[i].Endpoint))
+		if err != nil {
+			return err
+		}
+		key := util.FormEndpointName(parsedUrl, tmpConfig.Exceptions[i].Method)
+
+		c.Exceptions[key] = tmpConfig.Exceptions[i]
 	}
 
 	return err

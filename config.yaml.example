@@ -13,3 +13,8 @@ alternativeEndpoints:
         method: "GET"
       - endpoint: "http://localhost:8086/hello"
         method: "GET"
+exceptions:
+  - endpoint: "http://localhost:8087/hello"
+    method: "GET"
+  - endpoint: "http://localhost:8087/hello"
+    method: "GET"
