@@ -8,9 +8,11 @@ import (
 	"github.com/go-kit/log/level"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"net/url"
 )
 
 type executeAlternativeEndpointReq struct {
+	Request             *request
 	AlternativeEndpoint config.AlternativeEndpoint
 	Body                []byte
 	Header              map[string]string
@@ -29,9 +31,21 @@ func (s *service) executeAlternativeEndpoint(ctx context.Context, req *executeAl
 				)
 			}
 
+			parsedOpenEndpoint, _ := url.Parse(req.Request.URL)
+			parsedAltEndpoint, _ := url.Parse(alt.Endpoint)
+			altQueryParams := parsedAltEndpoint.Query()
+
+			for key, values := range parsedOpenEndpoint.Query() {
+				for _, value := range values {
+					altQueryParams.Add(key, value)
+				}
+			}
+
+			parsedAltEndpoint.RawQuery = altQueryParams.Encode()
+
 			// do request if error when getting cb status or cb status is not open
 			response, err := s.getCircuitBreaker(endpoint).Execute(func() (interface{}, error) {
-				return s.httpRequest(ctx, alt.Method, alt.Endpoint, req.Body, req.Header)
+				return s.httpRequest(ctx, alt.Method, parsedAltEndpoint.String(), req.Body, req.Header)
 			})
 			if err != nil {
 				level.Error(s.log).Log(

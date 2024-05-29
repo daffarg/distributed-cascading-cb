@@ -18,6 +18,7 @@ func (s *service) handleCircuitBreakerOpen(ctx context.Context, circuitBreakerNa
 
 	if hasAltEp {
 		res, err := s.executeAlternativeEndpoint(ctx, &executeAlternativeEndpointReq{
+			Request:             req,
 			AlternativeEndpoint: altEndpoint,
 			Body:                req.Body,
 			Header:              req.Header,
