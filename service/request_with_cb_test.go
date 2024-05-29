@@ -66,7 +66,7 @@ func Test_service_requestWithCircuitBreaker(t *testing.T) {
 				ctx: context.Background(),
 				req: &request{
 					Method:            "GET",
-					URL:               "\n\thttp://localhost:8080/hello",
+					URL:               "\n\thttp://localhost:8081/hello",
 					Header:            map[string]string{},
 					Body:              []byte{},
 					RequiringEndpoint: "http://localhost:8080/hello",

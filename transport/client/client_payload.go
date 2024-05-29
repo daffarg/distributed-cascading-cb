@@ -6,7 +6,7 @@ import (
 	"github.com/daffarg/distributed-cascading-cb/service"
 )
 
-func encodeGeneralRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+func encodeGeneralRequest(ctx context.Context, grpcReq interface{}) (interface{}, error) {
 	req := grpcReq.(*service.GeneralRequest)
 	return &protobuf.GeneralRequest{
 		Method:            req.Method,
@@ -18,7 +18,7 @@ func encodeGeneralRequest(_ context.Context, grpcReq interface{}) (interface{}, 
 	}, nil
 }
 
-func encodeGetRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+func encodeGetRequest(ctx context.Context, grpcReq interface{}) (interface{}, error) {
 	req := grpcReq.(*service.GetRequest)
 	return &protobuf.GetRequest{
 		Url:               req.URL,
@@ -28,7 +28,7 @@ func encodeGetRequest(_ context.Context, grpcReq interface{}) (interface{}, erro
 	}, nil
 }
 
-func encodePostRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+func encodePostRequest(ctx context.Context, grpcReq interface{}) (interface{}, error) {
 	req := grpcReq.(*service.PostRequest)
 	return &protobuf.PostRequest{
 		Url:               req.URL,
@@ -39,7 +39,7 @@ func encodePostRequest(_ context.Context, grpcReq interface{}) (interface{}, err
 	}, nil
 }
 
-func encodePutRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+func encodePutRequest(ctx context.Context, grpcReq interface{}) (interface{}, error) {
 	req := grpcReq.(*service.PutRequest)
 	return &protobuf.PutRequest{
 		Url:               req.URL,
@@ -50,7 +50,7 @@ func encodePutRequest(_ context.Context, grpcReq interface{}) (interface{}, erro
 	}, nil
 }
 
-func encodeDeleteRequest(_ context.Context, grpcReq interface{}) (interface{}, error) {
+func encodeDeleteRequest(ctx context.Context, grpcReq interface{}) (interface{}, error) {
 	req := grpcReq.(*service.DeleteRequest)
 	return &protobuf.DeleteRequest{
 		Url:               req.URL,
@@ -60,7 +60,7 @@ func encodeDeleteRequest(_ context.Context, grpcReq interface{}) (interface{}, e
 	}, nil
 }
 
-func decodeResponse(_ context.Context, grpcRes interface{}) (interface{}, error) {
+func decodeResponse(ctx context.Context, grpcRes interface{}) (interface{}, error) {
 	res := grpcRes.(*protobuf.Response)
 	return &service.Response{
 		Status:        res.Status,
