@@ -14,7 +14,8 @@ func (s *service) initConfig(ctx context.Context) {
 
 	for _, ep := range s.config.AlternativeEndpoints {
 		for _, alt := range ep.Alternatives {
-			endpointName := util.FormEndpointName(alt.Endpoint, alt.Method)
+			parsedUrl, _ := util.GetGeneralURLFormat(alt.Endpoint)
+			endpointName := util.FormEndpointName(parsedUrl, alt.Method)
 			_, err := s.repository.AddMembersIntoSet(
 				ctx,
 				util.FormRequiringEndpointsKey(endpointName),
@@ -26,36 +27,9 @@ func (s *service) initConfig(ctx context.Context) {
 					util.LogError, err,
 				)
 			}
-		}
-	}
-
-	for _, ep := range s.config.RequiringEndpoints {
-		endpointName := util.FormEndpointName(ep.Endpoint, ep.Method)
-		_, err := s.repository.AddMembersIntoSet(
-			ctx,
-			util.FormRequiringEndpointsKey(endpointName),
-			endpointName,
-		)
-		if err != nil {
-			level.Error(s.log).Log(
-				util.LogMessage, "failed to add requiring endpoint into set",
-				util.LogError, err,
-			)
-		}
-		for _, alt := range ep.Requirings {
-			requiringEndpointName := util.FormEndpointName(alt.Endpoint, alt.Method)
-			_, err := s.repository.AddMembersIntoSet(
-				ctx,
-				util.FormRequiringEndpointsKey(requiringEndpointName),
-				endpointName,
-				requiringEndpointName,
-			)
-			if err != nil {
-				level.Error(s.log).Log(
-					util.LogMessage, "failed to add requiring endpoint into set",
-					util.LogError, err,
-				)
-			}
+			encodedTopic := util.EncodeTopic(endpointName)
+			go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
+			s.subscribeMap[endpointName] = true
 		}
 	}
 }

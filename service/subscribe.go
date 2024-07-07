@@ -25,9 +25,12 @@ func (s *service) initSubscribe(ctx context.Context) error {
 		endpoint := util.GetEndpointFromRequiringsKey(key)
 		for _, ep := range endpoints {
 			if ep != endpoint {
-				s.subscribeMap[ep] = true
-				encodedTopic := util.EncodeTopic(ep)
-				go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
+				_, ok := s.subscribeMap[ep]
+				if !ok {
+					encodedTopic := util.EncodeTopic(ep)
+					go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
+					s.subscribeMap[ep] = true
+				}
 			}
 		}
 	}

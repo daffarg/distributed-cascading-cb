@@ -55,6 +55,7 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 
 		topic := util.EncodeTopic(circuitBreakerName)
 		msg, err := s.broker.Subscribe(ctx, topic)
+
 		if err != nil {
 			if !errors.Is(err, util.ErrUpdatedStatusNotFound) {
 				level.Error(s.log).Log(
@@ -73,9 +74,22 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 				)
 			}
 		} else {
+			go s.handleRequiringEndpoint(ctx, &handleRequiringEndpointReq{
+				RequiringEndpoint:  req.RequiringEndpoint,
+				RequiringMethod:    req.RequiringMethod,
+				CircuitBreakerName: circuitBreakerName,
+			})
+
+			go s.handleRequestedEndpoint(ctx, &handleRequestedEndpointReq{
+				RequestedEndpoint:   req.URL,
+				RequestedMethod:     req.Method,
+				CircuitBreakerName:  circuitBreakerName,
+				IsAlreadySubscribed: isAlreadySubscribed,
+			})
+
 			timestamp, _ := time.Parse(time.RFC3339, msg.Timestamp)
 			expiredTime := timestamp.Add(time.Duration(msg.Timeout) * time.Second)
-			if time.Now().Before(expiredTime) {
+			if time.Now().Before(expiredTime) && msg.Status == circuitbreaker.StateOpen.String() {
 				timeout := expiredTime.Sub(time.Now()) * time.Second
 				go func() {
 					err = s.repository.SetWithExp(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, timeout)
@@ -90,22 +104,7 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 					}
 				}()
 
-				go s.handleRequiringEndpoint(ctx, &handleRequiringEndpointReq{
-					RequiringEndpoint:  req.RequiringEndpoint,
-					RequiringMethod:    req.RequiringMethod,
-					CircuitBreakerName: circuitBreakerName,
-				})
-
-				go s.handleRequestedEndpoint(ctx, &handleRequestedEndpointReq{
-					RequestedEndpoint:   req.URL,
-					RequestedMethod:     req.Method,
-					CircuitBreakerName:  circuitBreakerName,
-					IsAlreadySubscribed: isAlreadySubscribed,
-				})
-
-				if msg.Status == circuitbreaker.StateOpen.String() {
-					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
-				}
+				return s.handleCircuitBreakerOpen(ctx, circuitBreakerName, req)
 			}
 		}
 	}
@@ -123,8 +122,6 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 		IsAlreadySubscribed: isAlreadySubscribed,
 	})
 
-	altEndpoint, hasAltEp := s.config.AlternativeEndpoints[circuitBreakerName]
-
 	_, err = s.repository.Get(ctx, endpointStatusKey)
 	if err != nil {
 		if !errors.Is(err, util.ErrKeyNotFound) {
@@ -141,20 +138,7 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 		})
 		if err != nil {
 			if errors.Is(err, circuitbreaker.ErrOpenState) {
-				if hasAltEp {
-					res, err := s.executeAlternativeEndpoint(ctx, &executeAlternativeEndpointReq{
-						AlternativeEndpoint: altEndpoint,
-						Body:                req.Body,
-						Header:              req.Header,
-					})
-					if err != nil {
-						return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteAltEndpoint.Error())
-					}
-					res.IsFromAlternativeEndpoint = true
-					return res, nil
-				} else {
-					return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
-				}
+				return s.handleCircuitBreakerOpen(ctx, circuitBreakerName, req)
 			}
 			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteRequest.Error())
 		}
@@ -162,19 +146,5 @@ func (s *service) requestWithCircuitBreaker(ctx context.Context, req *request) (
 		return response.(*Response), nil
 	}
 
-	// cb is open
-	if hasAltEp {
-		res, err := s.executeAlternativeEndpoint(ctx, &executeAlternativeEndpointReq{
-			AlternativeEndpoint: altEndpoint,
-			Body:                req.Body,
-			Header:              req.Header,
-		})
-		if err != nil {
-			return &Response{}, status.Error(codes.Internal, util.ErrFailedExecuteAltEndpoint.Error())
-		}
-		res.IsFromAlternativeEndpoint = true
-		return res, nil
-	}
-
-	return &Response{}, status.Error(codes.Unavailable, util.ErrCircuitBreakerOpen.Error())
+	return s.handleCircuitBreakerOpen(ctx, circuitBreakerName, req)
 }

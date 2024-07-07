@@ -80,7 +80,7 @@ func main() {
 	}
 
 	tracingProvider, err := tracer.NewTracerProvider(
-		context.Background(), os.Getenv("CB_CONSUMER_GROUP"), util.GetEnv("TRACING_BACKEND_URL", "localhost:4317"),
+		context.Background(), os.Getenv("SERVICE_NAME"), util.GetEnv("TRACING_BACKEND_URL", "localhost:4317"),
 	)
 	if err != nil {
 		level.Error(log).Log(

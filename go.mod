@@ -34,7 +34,9 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1 // indirect
+	github.com/jarcoal/httpmock v1.3.1 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/redis/go-redis/extra/rediscmd/v9 v9.0.5 // indirect
 	go.opentelemetry.io/otel/metric v1.25.0 // indirect
