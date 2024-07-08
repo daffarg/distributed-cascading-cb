@@ -349,6 +349,12 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 						util.LogStatus, msg,
 					)
 					continue
+				} else {
+					level.Info(k.log).Log(
+						util.LogMessage, "stored circuit breaker status into db",
+						util.LogTopic, topic,
+						util.LogStatus, msg,
+					)
 				}
 			}
 
