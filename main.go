@@ -132,6 +132,7 @@ func main() {
 	kafkaBroker, err := kafka.NewKafkaBroker(
 		log,
 		util.GetEnv("KAFKA_CONFIG_PATH", "client.properties"),
+		cbConfig,
 	)
 	if err != nil {
 		level.Error(log).Log(

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/daffarg/distributed-cascading-cb/broker"
 	"github.com/daffarg/distributed-cascading-cb/util"
 	"github.com/go-kit/log/level"
 )
@@ -28,7 +29,13 @@ func (s *service) initConfig(ctx context.Context) {
 				)
 			}
 			encodedTopic := util.EncodeTopic(endpointName)
-			go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
+			go s.broker.SubscribeAsync(broker.SubscribeAsyncRequest{
+				Ctx:          context.WithoutCancel(ctx),
+				Topic:        encodedTopic,
+				Set:          s.repository.SetWithExp,
+				Get:          s.repository.Get,
+				GetSetMember: s.repository.GetMemberOfSet,
+			})
 			s.subscribeMap[endpointName] = true
 		}
 	}

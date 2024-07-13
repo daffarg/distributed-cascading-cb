@@ -3,8 +3,10 @@ package kafka
 import (
 	"bufio"
 	"context"
+	"errors"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/daffarg/distributed-cascading-cb/broker"
+	"github.com/daffarg/distributed-cascading-cb/config"
 	"github.com/daffarg/distributed-cascading-cb/protobuf"
 	"github.com/daffarg/distributed-cascading-cb/util"
 	"github.com/go-kit/log"
@@ -16,11 +18,12 @@ import (
 )
 
 type kafkaBroker struct {
-	config kafka.ConfigMap
-	log    log.Logger
+	config   kafka.ConfigMap
+	log      log.Logger
+	cbConfig *config.Config
 }
 
-func NewKafkaBroker(log log.Logger, configPath string) (broker.MessageBroker, error) {
+func NewKafkaBroker(log log.Logger, configPath string, cbConfig *config.Config) (broker.MessageBroker, error) {
 	m := make(map[string]kafka.ConfigValue)
 
 	file, err := os.Open(configPath)
@@ -47,8 +50,9 @@ func NewKafkaBroker(log log.Logger, configPath string) (broker.MessageBroker, er
 	m["group.id"] = os.Getenv("CB_CONSUMER_GROUP")
 
 	return &kafkaBroker{
-		config: m,
-		log:    log,
+		config:   m,
+		log:      log,
+		cbConfig: cbConfig,
 	}, nil
 }
 
@@ -233,47 +237,47 @@ func (k *kafkaBroker) Subscribe(_ context.Context, topic string) (*protobuf.Stat
 	}
 }
 
-func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler func(ctx context.Context, key, value string, exp time.Duration) error) {
+func (k *kafkaBroker) SubscribeAsync(request broker.SubscribeAsyncRequest) {
 	adminClient, err := kafka.NewAdminClient(&k.config)
 	if err != nil {
 		level.Error(k.log).Log(
 			util.LogMessage, "failed to get kafka admin client",
-			util.LogTopic, topic,
+			util.LogTopic, request.Topic,
 			util.LogError, err,
 		)
 	} else {
-		metadata, err := adminClient.GetMetadata(&topic, false, util.GetIntEnv("KAFKA_GET_METADATA_TIMEOUT", 30000))
+		metadata, err := adminClient.GetMetadata(&request.Topic, false, util.GetIntEnv("KAFKA_GET_METADATA_TIMEOUT", 30000))
 		if err != nil {
 			level.Error(k.log).Log(
 				util.LogMessage, "failed to get metadata of kafka topic",
-				util.LogTopic, topic,
+				util.LogTopic, request.Topic,
 				util.LogError, err,
 			)
 		}
 
 		level.Info(k.log).Log(
 			util.LogMessage, "metadata of kafka topic",
-			util.LogTopic, topic,
+			util.LogTopic, request.Topic,
 			util.LogMetadata, metadata,
 		)
 
-		if len(metadata.Topics[topic].Partitions) <= 0 { // determine if the topic not exists
+		if len(metadata.Topics[request.Topic].Partitions) <= 0 { // determine if the topic not exists
 			level.Info(k.log).Log(
 				util.LogMessage, "kafka topic not found, will be creating the topic",
-				util.LogTopic, topic,
+				util.LogTopic, request.Topic,
 			)
 
 			topicSpecification := []kafka.TopicSpecification{{
-				Topic:             topic,
+				Topic:             request.Topic,
 				NumPartitions:     1,
 				ReplicationFactor: 3,
 			}}
 
-			results, err := adminClient.CreateTopics(ctx, topicSpecification)
+			results, err := adminClient.CreateTopics(request.Ctx, topicSpecification)
 			if err != nil {
 				level.Error(k.log).Log(
 					util.LogMessage, "failed to create a new kafka topic",
-					util.LogTopic, topic,
+					util.LogTopic, request.Topic,
 					util.LogError, err,
 				)
 			}
@@ -297,11 +301,11 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 	consumer, _ := kafka.NewConsumer(&k.config)
 
 	for {
-		err := consumer.SubscribeTopics([]string{topic}, nil)
+		err := consumer.SubscribeTopics([]string{request.Topic}, nil)
 		if err != nil {
 			level.Warn(k.log).Log(
 				util.LogMessage, "failed to subscribe to topic",
-				util.LogTopic, topic,
+				util.LogTopic, request.Topic,
 				util.LogError, err,
 			)
 			time.Sleep(time.Duration(util.GetIntEnv("RETRY_SUBSCRIBE_INTERVAL", 10)) * time.Second)
@@ -313,7 +317,7 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 
 	level.Info(k.log).Log(
 		util.LogMessage, "subscribed to a kafka topic",
-		util.LogTopic, topic,
+		util.LogTopic, request.Topic,
 	)
 
 	for {
@@ -321,7 +325,7 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 		if err != nil {
 			level.Error(k.log).Log(
 				util.LogMessage, "failed to read a message from kafka",
-				util.LogTopic, topic,
+				util.LogTopic, request.Topic,
 				util.LogError, err,
 			)
 		} else {
@@ -331,30 +335,162 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 				level.Error(k.log).Log(
 					util.LogMessage, "failed to unmarshal kafka message",
 					util.LogError, err,
-					util.LogTopic, topic,
+					util.LogTopic, request.Topic,
 				)
 				continue
+			}
+
+			_, err = consumer.CommitMessage(kafkaMsg)
+			if err != nil {
+				level.Error(k.log).Log(
+					util.LogMessage, "failed to commit a kafka message",
+					util.LogError, err,
+					util.LogTopic, request.Topic,
+				)
+			} else {
+				level.Info(k.log).Log(
+					util.LogMessage, "received and committed a kafka message",
+					util.LogTopic, request.Topic,
+					util.LogStatus, msg,
+				)
 			}
 
 			timestamp, _ := time.Parse(time.RFC3339, msg.Timestamp)
 			expiredTime := timestamp.Add(time.Duration(msg.Timeout) * time.Second)
 			if time.Now().Before(expiredTime) {
 				timeout := expiredTime.Sub(time.Now()) * time.Second
-				err = handler(context.WithoutCancel(ctx), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, timeout)
-				if err != nil {
-					level.Error(k.log).Log(
-						util.LogMessage, "failed to store circuit breaker status into db",
-						util.LogError, err,
-						util.LogTopic, topic,
-						util.LogStatus, msg,
-					)
-					continue
+				isThereAlt := false
+				if alt, ok := k.cbConfig.AlternativeEndpoints[msg.Endpoint]; ok {
+					for _, ep := range alt.Alternatives {
+						endpointName := util.FormEndpointName(ep.Endpoint, ep.Method)
+						_, err := request.Get(context.Background(), util.FormEndpointStatusKey(endpointName))
+						if err != nil {
+							if errors.Is(err, util.ErrKeyNotFound) {
+								isThereAlt = true
+								break
+							} else {
+								level.Error(k.log).Log(
+									util.LogMessage, "failed to get endpoint status from db",
+									util.LogEndpoint, endpointName,
+									util.LogError, err,
+								)
+							}
+						}
+					}
+				}
+
+				if !isThereAlt {
+					go func() {
+						requiringEndpoints, err := request.GetSetMember(context.Background(), util.FormRequiringEndpointsKey(msg.Endpoint))
+						if err != nil {
+							level.Error(k.log).Log(
+								util.LogMessage, "failed to get requiring endpoints from db",
+								util.LogError, err,
+								util.LogCircuitBreakerEndpoint, msg.Endpoint,
+								util.LogCircuitBreakerNewStatus, msg.Status,
+							)
+
+							err := request.Set(context.Background(), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, timeout)
+							if err != nil {
+								level.Error(k.log).Log(
+									util.LogMessage, "failed to set circuit breaker status to db",
+									util.LogError, err,
+									util.LogCircuitBreakerEndpoint, msg.Endpoint,
+									util.LogCircuitBreakerNewStatus, msg.Status,
+								)
+							}
+						} else {
+							for _, ep := range requiringEndpoints {
+								encodedTopic := util.EncodeTopic(ep)
+								message := &protobuf.Status{
+									Endpoint:  ep,
+									Status:    msg.Status,
+									Timeout:   uint32(util.GetIntEnv("CB_TIMEOUT", 60)),
+									Timestamp: time.Now().Format(time.RFC3339),
+								}
+								if err != nil {
+									level.Error(k.log).Log(
+										util.LogMessage, "failed to marshal circuit breaker status",
+										util.LogError, err,
+										util.LogCircuitBreakerEndpoint, ep,
+										util.LogCircuitBreakerNewStatus, msg.Status,
+									)
+								}
+
+								err = k.Publish(context.Background(), encodedTopic, message)
+								if err != nil {
+									level.Error(k.log).Log(
+										util.LogMessage, "failed to publish circuit breaker status",
+										util.LogError, err,
+										util.LogCircuitBreakerEndpoint, ep,
+										util.LogCircuitBreakerNewStatus, msg.Status,
+									)
+								} else {
+									level.Info(k.log).Log(
+										util.LogMessage, "published circuit breaker status",
+										util.LogStatus, message,
+									)
+								}
+
+								err := request.Set(context.Background(), util.FormEndpointStatusKey(ep), msg.Status, timeout)
+								if err != nil {
+									level.Error(k.log).Log(
+										util.LogMessage, "failed to set circuit breaker status to db",
+										util.LogError, err,
+										util.LogCircuitBreakerEndpoint, ep,
+										util.LogCircuitBreakerNewStatus, msg.Status,
+									)
+								}
+							}
+						}
+					}()
 				} else {
 					level.Info(k.log).Log(
-						util.LogMessage, "stored circuit breaker status into db",
-						util.LogTopic, topic,
-						util.LogStatus, msg,
+						util.LogMessage, "there are still alternative endpoints, only publishing the endpoint not its requirings",
+						util.LogCircuitBreakerEndpoint, msg.Endpoint,
+						util.LogCircuitBreakerNewStatus, msg.Status,
 					)
+
+					err := request.Set(context.Background(), util.FormEndpointStatusKey(msg.Endpoint), msg.Status, timeout)
+					if err != nil {
+						level.Error(k.log).Log(
+							util.LogMessage, "failed to set circuit breaker status to db",
+							util.LogError, err,
+							util.LogCircuitBreakerEndpoint, msg.Endpoint,
+							util.LogCircuitBreakerNewStatus, msg.Status,
+						)
+					}
+
+					encodedTopic := util.EncodeTopic(msg.Endpoint)
+					message := &protobuf.Status{
+						Endpoint:  msg.Endpoint,
+						Status:    msg.Status,
+						Timeout:   uint32(util.GetIntEnv("CB_TIMEOUT", 60)),
+						Timestamp: time.Now().Format(time.RFC3339),
+					}
+					if err != nil {
+						level.Error(k.log).Log(
+							util.LogMessage, "failed to marshal circuit breaker status",
+							util.LogError, err,
+							util.LogCircuitBreakerEndpoint, msg.Endpoint,
+							util.LogCircuitBreakerNewStatus, msg.Status,
+						)
+					}
+
+					err = k.Publish(context.Background(), encodedTopic, message)
+					if err != nil {
+						level.Error(k.log).Log(
+							util.LogMessage, "failed to publish circuit breaker status",
+							util.LogError, err,
+							util.LogCircuitBreakerEndpoint, msg.Endpoint,
+							util.LogCircuitBreakerNewStatus, msg.Status,
+						)
+					} else {
+						level.Info(k.log).Log(
+							util.LogMessage, "published circuit breaker status",
+							util.LogStatus, message,
+						)
+					}
 				}
 			}
 
@@ -363,12 +499,12 @@ func (k *kafkaBroker) SubscribeAsync(ctx context.Context, topic string, handler 
 				level.Error(k.log).Log(
 					util.LogMessage, "failed to commit a kafka message",
 					util.LogError, err,
-					util.LogTopic, topic,
+					util.LogTopic, request.Topic,
 				)
 			} else {
 				level.Info(k.log).Log(
 					util.LogMessage, "received and committed a kafka message",
-					util.LogTopic, topic,
+					util.LogTopic, request.Topic,
 					util.LogStatus, msg,
 				)
 			}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/daffarg/distributed-cascading-cb/broker"
 	"github.com/daffarg/distributed-cascading-cb/util"
 	"github.com/go-kit/log/level"
 )
@@ -28,7 +29,14 @@ func (s *service) initSubscribe(ctx context.Context) error {
 				_, ok := s.subscribeMap[ep]
 				if !ok {
 					encodedTopic := util.EncodeTopic(ep)
-					go s.broker.SubscribeAsync(context.WithoutCancel(ctx), encodedTopic, s.repository.SetWithExp)
+					go s.broker.SubscribeAsync(
+						broker.SubscribeAsyncRequest{
+							Ctx:          context.WithoutCancel(ctx),
+							Topic:        encodedTopic,
+							Set:          s.repository.SetWithExp,
+							Get:          s.repository.Get,
+							GetSetMember: s.repository.GetMemberOfSet,
+						})
 					s.subscribeMap[ep] = true
 				}
 			}
